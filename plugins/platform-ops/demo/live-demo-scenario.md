@@ -28,9 +28,11 @@
    * In `deploy/dev/config.yaml`, set an invalid port or an unrouted ALB pattern (e.g., priority `10` which collides with `zippo-be`, or missing health check).
 2. **Run the Orchestrator:**
    ```bash
-   python3 scripts/tdd_orchestrator.py deploy/dev/config.yaml
+   uv run scripts/tdd_orchestrator.py --config deploy/dev/config.yaml --specs-dir Project_Specifications/
    ```
 3. **Point to the terminal:**
+   * Discovery step automatically locates local PC architecture specs:
+     `🔍 Discovered additional local specifications at: .../Project_Specifications`
    * Large red badge appears: `🔴 [RED PHASE: SPECIFICATION VIOLATION / ASSERTION FAILED]`
    * Highlight to the audience: *"In traditional workflows, you'd find this out 20 minutes into deployment or in a staging incident. Here, our Python runner caught it in 1.4 seconds."*
 
@@ -38,10 +40,11 @@
 
 ### Act 3: Claude Enters the Loop (Self-Healing in Real Time) — 2.5 Minutes
 1. **Prompt Claude Code:**
-   > *"Run the platform-ops TDD orchestrator on `zippo-certs`. Analyze the failure, heal the configuration to satisfy all contract rules, and repeat until green."*
+   > *"Run the platform-ops TDD orchestrator on `zippo-certs`. Cross-reference local specifications in `Project_Specifications/`, analyze the failure, heal the configuration to satisfy all contract rules, and repeat until green."*
 2. **Audience watches Claude's thought process:**
    * Claude inspects the diagnostic error emitted by the Python orchestrator.
-   * Claude identifies the root cause (e.g., *"Rule priority 10 collides with backend; adjusting to priority 5 for higher precedence"*).
+   * Claude checks local architectural specs (`09_NETWORKING_AND_INGRESS.md` for priority allocations).
+   * Claude identifies the root cause (e.g., *"Rule priority 10 collides with backend; adjusting to priority 5 for higher precedence as required by local specs"*).
    * Claude edits `config.yaml` or the Terraform wrapper.
    * Claude triggers the orchestrator runner automatically.
 
@@ -53,6 +56,16 @@
    ══════════════════════════════════════════════════════════════════════
                AI-DRIVEN IAC ORCHESTRATOR: TDD LOOP
    ══════════════════════════════════════════════════════════════════════
+   [*] Phase: Checking for Additional Local Specifications...
+     🔍 Discovered additional local specifications at: .../Project_Specifications
+     Found 11 local specification document(s):
+       • 00_ARCHITECTURE_OVERVIEW.md
+       • 01_NAMING_CONVENTIONS.md
+       • 04_APPLICATION_DEPLOYMENT_CONFIG.md
+       • 09_NETWORKING_AND_INGRESS.md
+       ...
+     ✓ Local specifications loaded and checked for architecture constraints.
+
    [*] Phase: Validating Specification (config.yaml)...
      ✓ Schema Contract: Valid (100% compliant with JSON Schema)
    [*] Phase: Executing Native Terraform Contract Tests (*.tftest.hcl)...

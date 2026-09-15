@@ -108,6 +108,12 @@ def parse_args():
         default=None,
         help="Path to the JSON schema file to validate against."
     )
+    parser.add_argument(
+        "-d", "--specs-dir",
+        dest="specs_dir",
+        default=os.environ.get("ADDITIONAL_SPECS_PATH") or os.environ.get("PROJECT_SPECS_PATH"),
+        help="Path to additional local specifications on PC to cross-reference (or env ADDITIONAL_SPECS_PATH)."
+    )
     return parser.parse_args()
 
 def main():
@@ -135,6 +141,30 @@ def main():
     print("=" * 60)
     print("SPEC-DRIVEN DEVELOPMENT: CONFIG VALIDATOR")
     print(f"Schema: {os.path.relpath(schema_path)}")
+
+    # Check for additional local specifications
+    specs_dir = args.specs_dir
+    if not specs_dir:
+        candidates = [
+            os.path.abspath("Project_Specifications"),
+            os.path.abspath("../Project_Specifications"),
+            os.path.abspath("../../Project_Specifications"),
+            os.path.abspath("../../../Project_Specifications"),
+            os.path.abspath("zippo-specs"),
+            os.path.abspath("../zippo-specs"),
+        ]
+        for c in candidates:
+            if os.path.isdir(c) and any(f.endswith(".md") for f in os.listdir(c)):
+                specs_dir = c
+                break
+
+    if specs_dir and os.path.isdir(specs_dir):
+        doc_count = len([f for f in os.listdir(specs_dir) if f.endswith(".md")])
+        print(f"Local Specs Detected: {os.path.relpath(specs_dir)} ({doc_count} documents)")
+    elif specs_dir and not os.path.exists(specs_dir):
+        print(f"Local Specs Path: Not found ({specs_dir})")
+    else:
+        print("Local Specs: None specified (using standard baseline)")
     print("=" * 60)
 
     for file_path in target_files:

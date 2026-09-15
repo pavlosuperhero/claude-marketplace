@@ -42,8 +42,16 @@ Before performing actions, refer to the authoritative specification documents:
 ### Workflow A: Onboard a New Application Service
 When a user asks to deploy or onboard a new application or microservice:
 
-1. **Intake & Escalation Check:**
-   Prompt the user for the mandatory intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):
+1. **Check for Additional Local Specifications:**
+   * Scan the local machine or prompt for any additional project specifications (e.g. `./Project_Specifications`, `zippo-specs/`, `--specs-dir <path>`, or `ADDITIONAL_SPECS_PATH`).
+   * If local specs exist, inspect and cross-reference them:
+     - Read [09_NETWORKING_AND_INGRESS.md](09_NETWORKING_AND_INGRESS.md) for existing ALB rule priorities (e.g. `/api/v1/certs/*` at 5, `/api/*` at 10, `/*` at 100) to avoid collisions.
+     - Read [04_APPLICATION_DEPLOYMENT_CONFIG.md](04_APPLICATION_DEPLOYMENT_CONFIG.md) for sizing guidelines and baseline subnets.
+     - Read [07_IAM_SECURITY_AND_OIDC.md](07_IAM_SECURITY_AND_OIDC.md) for `eo_role_boundary` requirements.
+   * Auto-fill known parameters and only prompt the user for unique application-specific parameters.
+
+2. **Intake & Escalation Check:**
+   Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):
    * Service identifier (`<service-name>`, kebab-case)
    * Container listening port (e.g. `3000`, `8080`) & health check path (e.g. `/healthz`)
    * Ingress path patterns (e.g. `["/api/<service>/*"]`) & unique ALB rule priority
@@ -51,22 +59,22 @@ When a user asks to deploy or onboard a new application or microservice:
    * Sidecars (e.g. redis cache), SES/S3 permissions, SSM parameters, and secrets.
    * **🚨 ESCALATION TRIGGERS:** If the service requires non-default subnets, dedicated security group ingress CIDRs, dedicated direct ALB ports, or IAM permissions beyond SES/S3/SSM/Secrets (e.g., DynamoDB, SQS), pause self-service generation and output an **Escalation Request** for the Platform Team.
 
-2. **Generate Specification Contract:**
+3. **Generate Specification Contract:**
    * Create `deploy/<env>/config.yaml` using the template at `templates/app/config.yaml.tpl`.
 
-3. **Validate Against JSON Schema (via `uv`):**
-   * Run the validator script with `uv run`:
+4. **Validate Against JSON Schema (via `uv`):**
+   * Run the validator script with `uv run` (including `--specs-dir` check):
      ```bash
-     uv run tests/validate_configs.py --config <target-repo>/deploy/<env>/config.yaml
+     uv run tests/validate_configs.py --config <target-repo>/deploy/<env>/config.yaml --specs-dir <local-specs-path>
      ```
    * Enforce schema compliance before generating or applying Terraform code.
 
-4. **Scaffold Deployment Manifests:**
+5. **Scaffold Deployment Manifests:**
    * Generate `deploy/<env>/main.tf` from `templates/app/main.tf.tpl`.
    * Generate `locals.tf`, `providers.tf`, `variables.tf`, and `versions.tf`.
    * Generate CI/CD workflow from `templates/app/ci-workflow.yml.tpl`.
 
-5. **Run Contract Tests (TDD):**
+6. **Run Contract Tests (TDD):**
    * Execute the Terraform contract test suite:
      ```bash
      terraform -chdir=tests/tftests test -filter=app_contract.tftest.hcl
@@ -110,9 +118,9 @@ Follow the dynamic provisioning pattern in [03-deployment-process.md](docs/03-de
 When generating, validating, or fixing configurations against failing tests:
 
 1. **Trigger Orchestrator Runner via `uv`:**
-   Run the visual TDD orchestrator with CLI flags:
+   Run the visual TDD orchestrator with CLI flags (automatically discovers local specs or pass `--specs-dir`):
    ```bash
-   uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module>
+   uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module> [--specs-dir <path-to-local-specs>]
    ```
 
 2. **Diagnose Failures (Red State):**

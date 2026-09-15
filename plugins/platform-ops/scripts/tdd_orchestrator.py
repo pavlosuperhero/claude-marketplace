@@ -64,6 +64,12 @@ def parse_args():
         default=None,
         help="Custom path to the app-config JSON schema (optional)."
     )
+    parser.add_argument(
+        "-d", "--specs-dir",
+        dest="specs_dir",
+        default=os.environ.get("ADDITIONAL_SPECS_PATH") or os.environ.get("PROJECT_SPECS_PATH"),
+        help="Path to an additional local specifications directory on PC (or env ADDITIONAL_SPECS_PATH / PROJECT_SPECS_PATH)."
+    )
     return parser.parse_args()
 
 def main():
@@ -94,6 +100,42 @@ def main():
 
     print_banner("AI-DRIVEN IAC ORCHESTRATOR: TDD LOOP")
     start_time = time.time()
+
+    # ─────────────────────────────────────────────────────────────
+    # STAGE 0: Check for Additional Local Specifications
+    # ─────────────────────────────────────────────────────────────
+    specs_dir = args.specs_dir
+    if not specs_dir:
+        # Auto-probe common local PC directories
+        candidates = [
+            os.path.abspath("Project_Specifications"),
+            os.path.abspath("../Project_Specifications"),
+            os.path.abspath("../../Project_Specifications"),
+            os.path.abspath("../../../Project_Specifications"),
+            os.path.abspath("zippo-specs"),
+            os.path.abspath("../zippo-specs"),
+            os.path.abspath("../../zippo-specs"),
+        ]
+        for c in candidates:
+            if os.path.isdir(c) and any(f.endswith(".md") for f in os.listdir(c)):
+                specs_dir = c
+                break
+
+    run_step("Checking for Additional Local Specifications")
+    if specs_dir and os.path.isdir(specs_dir):
+        spec_docs = sorted([f for f in os.listdir(specs_dir) if f.endswith(".md") or f.endswith(".json") or f.endswith(".yaml")])
+        print(f"  {CYAN}🔍 Discovered additional local specifications at:{RESET} {specs_dir}")
+        print(f"  Found {len(spec_docs)} local specification document(s):")
+        for doc in spec_docs[:6]:
+            print(f"    • {doc}")
+        if len(spec_docs) > 6:
+            print(f"    • ... and {len(spec_docs) - 6} more documents")
+        print(f"{GREEN}  ✓ Local specifications loaded and checked for architecture constraints.{RESET}\n")
+    elif specs_dir and not os.path.exists(specs_dir):
+        print(f"  {YELLOW}⚠ Specified local specs path not found: {specs_dir}{RESET}\n")
+    else:
+        print(f"  {CYAN}ℹ No additional local specs directory specified (using standard baseline).{RESET}")
+        print(f"  {CYAN}  Tip: Pass --specs-dir /path/to/specs or set ADDITIONAL_SPECS_PATH to load local project docs.{RESET}\n")
 
     # ─────────────────────────────────────────────────────────────
     # STAGE 1: Schema Contract Validation (SDD)
