@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#     "pyyaml",
+# ]
+# ///
 """
 TDD IaC Orchestrator & Live Demo Test Runner
 Executes the Red-Green-Refactor loop:
-  1. Validates declarative config against JSON Schema
+  1. Validates declarative config against JSON Schema (using uv / pyyaml)
   2. Runs native Terraform contract tests (*.tftest.hcl) in mock mode
   3. Formats presentation-friendly RED / GREEN output for human audience & AI self-healing
+
+CLI Usage:
+  uv run scripts/tdd_orchestrator.py --config /path/to/config.yaml --infra-dir /path/to/infra/module
+  # Or via environment variables:
+  INFRA_REPO_PATH=/path/to/infra uv run scripts/tdd_orchestrator.py --config /path/to/config.yaml
 """
 
 import sys
@@ -12,13 +22,7 @@ import os
 import subprocess
 import time
 import re
-
-# Auto-elevate to workspace venv python if available
-for _sub in ["ZIPPO-INFR/.venv/bin/python3", ".venv/bin/python3"]:
-    _cand = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..", _sub))
-    if os.path.exists(_cand) and sys.executable != _cand:
-        os.execv(_cand, [_cand] + sys.argv)
-
+import argparse
 
 # ANSI Color Codes for terminal presentation
 BOLD = "\033[1m"
@@ -38,25 +42,55 @@ def print_banner(title):
 def run_step(step_name):
     print(f"{BOLD}[*] Phase: {step_name}...{RESET}")
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run the TDD IaC Orchestrator against an application config and Terraform module."
+    )
+    parser.add_argument(
+        "-c", "--config",
+        dest="config_path",
+        default=os.environ.get("APP_CONFIG_PATH"),
+        help="Path to the application deployment config.yaml to validate (or env APP_CONFIG_PATH)."
+    )
+    parser.add_argument(
+        "-i", "--infra-dir",
+        dest="infra_dir",
+        default=os.environ.get("INFRA_REPO_PATH"),
+        help="Path to the Terraform infrastructure module or test directory (or env INFRA_REPO_PATH)."
+    )
+    parser.add_argument(
+        "-s", "--schema",
+        dest="schema_path",
+        default=None,
+        help="Custom path to the app-config JSON schema (optional)."
+    )
+    return parser.parse_args()
+
 def main():
+    args = parse_args()
     plugin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
-    # Search for aws-epam-ecs-app or fallback to plugin tests
-    test_module_dir = None
-    search_dirs = [
-        os.path.abspath(os.path.join(plugin_dir, "../../../ZIPPO-INFR/iac/aws-epam-ecs-app")),
-        os.path.abspath(os.path.join(plugin_dir, "../../ZIPPO-INFR/iac/aws-epam-ecs-app")),
-        os.path.abspath(os.path.join(plugin_dir, "tests/tftests"))
-    ]
-    for d in search_dirs:
-        if os.path.exists(d):
-            test_module_dir = d
-            break
-            
+    # Resolve infra directory
+    infra_dir = args.infra_dir
+    if not infra_dir:
+        # Check standard relative search locations if not provided
+        candidates = [
+            os.path.abspath(os.path.join(plugin_dir, "tests/tftests")),
+            os.path.abspath(os.path.join(plugin_dir, "../../../ZIPPO-INFR/iac/aws-epam-ecs-app")),
+            os.path.abspath(os.path.join(plugin_dir, "../../ZIPPO-INFR/iac/aws-epam-ecs-app")),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                infra_dir = c
+                break
+
+    if not infra_dir or not os.path.exists(infra_dir):
+        print(f"{RED}Error: Infrastructure directory not specified or does not exist.{RESET}")
+        print("Please pass --infra-dir /path/to/module or set INFRA_REPO_PATH environment variable.")
+        sys.exit(1)
+
     validator_script = os.path.join(plugin_dir, "tests/validate_configs.py")
-
-
-    target_config = sys.argv[1] if len(sys.argv) > 1 else None
+    schema_path = args.schema_path or os.path.join(plugin_dir, "schemas/app-config.schema.json")
 
     print_banner("AI-DRIVEN IAC ORCHESTRATOR: TDD LOOP")
     start_time = time.time()
@@ -64,9 +98,13 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # STAGE 1: Schema Contract Validation (SDD)
     # ─────────────────────────────────────────────────────────────
-    if target_config and os.path.exists(target_config):
-        run_step(f"Validating Specification ({os.path.basename(target_config)})")
-        val_cmd = [sys.executable, validator_script, target_config]
+    if args.config_path:
+        if not os.path.exists(args.config_path):
+            print(f"{RED}Error: Config file not found at: {args.config_path}{RESET}")
+            sys.exit(1)
+
+        run_step(f"Validating Specification ({os.path.basename(args.config_path)})")
+        val_cmd = ["uv", "run", validator_script, "--config", args.config_path, "--schema", schema_path]
         proc = subprocess.run(val_cmd, capture_output=True, text=True)
         
         if proc.returncode != 0:
@@ -87,9 +125,9 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # STAGE 2: Native Terraform Contract Tests (TDD)
     # ─────────────────────────────────────────────────────────────
-    run_step("Executing Native Terraform Contract Tests (*.tftest.hcl)")
+    run_step(f"Executing Native Terraform Contract Tests in: {os.path.basename(infra_dir)}")
     
-    tf_cmd = ["terraform", f"-chdir={test_module_dir}", "test"]
+    tf_cmd = ["terraform", f"-chdir={infra_dir}", "test"]
     env = os.environ.copy()
     env["TF_CLI_CONFIG_FILE"] = "/dev/null"
     
@@ -108,7 +146,6 @@ def main():
 
     elapsed = time.time() - start_time
 
-
     if tf_proc.returncode != 0 or fails > 0:
         print(f"\n{RED}{'━' * 70}{RESET}")
         print(f"{RED}🔴 [RED PHASE: TEST ASSERTION FAILURES DETECTED]{RESET} ({elapsed:.2f}s)")
@@ -118,7 +155,7 @@ def main():
         # Extract specific error messages
         print(f"{BOLD}Diagnostic Output:{RESET}")
         for line in output.splitlines():
-            if "fail" in line or "Error:" in line or "error_message" in line or "Error while" in line:
+            if any(k in line for k in ["fail", "Error:", "error_message", "Error while"]):
                 print(f"  {RED}✖ {line.strip()}{RESET}")
             elif "run " in line:
                 print(f"  • {line.strip()}")

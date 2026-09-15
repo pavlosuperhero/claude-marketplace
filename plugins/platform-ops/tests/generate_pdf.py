@@ -9,17 +9,39 @@ import subprocess
 import glob
 import re
 
+import argparse
+
 def escape_ps(text):
     """Escape parenthesis and backslashes for PostScript strings."""
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Compile documentation markdown files into a styled PDF."
+    )
+    parser.add_argument(
+        "-d", "--docs-dir",
+        dest="docs_dir",
+        default=None,
+        help="Path to directory containing markdown specification files."
+    )
+    parser.add_argument(
+        "-o", "--output",
+        dest="output_pdf",
+        default=None,
+        help="Target path for generated PDF."
+    )
+    return parser.parse_args()
+
 def main():
-    specs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    docs_dir = os.path.join(specs_dir, "docs")
-    pdf_out = os.path.join(docs_dir, "zippo-deployment-spec.pdf")
+    args = parse_args()
+    default_base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    docs_dir = args.docs_dir or os.path.join(default_base, "docs")
+    pdf_out = args.output_pdf or os.path.join(docs_dir, "zippo-deployment-spec.pdf")
     ps_temp = os.path.join(docs_dir, "temp_spec.ps")
 
     md_files = sorted(glob.glob(os.path.join(docs_dir, "*.md")))
+
 
     # PostScript header with basic typography setup
     ps_lines = [

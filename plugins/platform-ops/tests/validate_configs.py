@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#     "pyyaml",
+# ]
+# ///
 """
-ZIPPO Specification & Config Validator
-Validates application YAML configurations against zippo-specs JSON schemas.
-Uses built-in standard library + PyYAML from venv if present, with fallback parser.
+Specification & Config Validator
+Validates application YAML configurations against JSON schemas.
+Uses PEP 723 metadata for automated dependency management via 'uv run'.
+
+CLI Usage:
+  uv run tests/validate_configs.py --config /path/to/config.yaml --schema /path/to/schema.json
+  # Or multiple files:
+  uv run tests/validate_configs.py config1.yaml config2.yaml
 """
 
 import sys
 import os
 import re
 import json
-
-try:
-    import yaml
-except ImportError:
-    # Search parent directories for a virtualenv containing PyYAML
-    cur = os.path.dirname(os.path.abspath(__file__))
-    for _ in range(6):
-        for sub in ["ZIPPO-INFR/.venv/bin/python3", ".venv/bin/python3"]:
-            candidate = os.path.join(cur, sub)
-            if os.path.exists(candidate) and sys.executable != os.path.abspath(candidate):
-                os.execv(candidate, [candidate] + sys.argv)
-        cur = os.path.dirname(cur)
-    raise
-
+import argparse
+import yaml
 
 def validate_schema(instance, schema, path="root"):
     errors = []
@@ -89,44 +87,72 @@ def validate_schema(instance, schema, path="root"):
 
     return errors
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Validate application YAML deployment configurations against JSON schema."
+    )
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="One or more YAML configuration files to validate."
+    )
+    parser.add_argument(
+        "-c", "--config",
+        dest="single_config",
+        default=None,
+        help="Path to a single config YAML file."
+    )
+    parser.add_argument(
+        "-s", "--schema",
+        dest="schema_path",
+        default=None,
+        help="Path to the JSON schema file to validate against."
+    )
+    return parser.parse_args()
+
 def main():
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    schema_path = os.path.join(base_dir, "schemas/app-config.schema.json")
-    
-    with open(schema_path, "r") as f:
+    args = parse_args()
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_schema = os.path.abspath(os.path.join(script_dir, "../schemas/app-config.schema.json"))
+    schema_path = args.schema_path or default_schema
+
+    if not os.path.exists(schema_path):
+        print(f"Error: Schema file not found: {schema_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(schema_path, "r", encoding="utf-8") as f:
         schema = json.load(f)
 
-    test_files = [
-        os.path.abspath(os.path.join(base_dir, "../ZIPPO-BE/deploy/dev/config.yaml")),
-        os.path.abspath(os.path.join(base_dir, "../ZIPPO-FE/deploy/dev/config.yaml"))
-    ]
-    
-    # Also validate any file passed as CLI argument
-    if len(sys.argv) > 1:
-        test_files = [os.path.abspath(f) for f in sys.argv[1:]]
+    target_files = list(args.files)
+    if args.single_config:
+        target_files.append(args.single_config)
+
+    if not target_files:
+        print("Usage: uv run tests/validate_configs.py <path-to-config.yaml> [--schema <schema.json>]")
+        sys.exit(1)
 
     all_passed = True
     print("=" * 60)
-    print("ZIPPO SPEC-DRIVEN DEVELOPMENT: CONFIG VALIDATOR")
+    print("SPEC-DRIVEN DEVELOPMENT: CONFIG VALIDATOR")
     print(f"Schema: {os.path.relpath(schema_path)}")
     print("=" * 60)
 
-    for file_path in test_files:
-        if not os.path.exists(file_path):
+    for file_path in target_files:
+        abs_path = os.path.abspath(file_path)
+        if not os.path.exists(abs_path):
             print(f"[-] SKIPPED: {file_path} not found")
             continue
         try:
-            with open(file_path, "r") as f:
+            with open(abs_path, "r", encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)
             
-            # Normalize uppercase keys if needed
             errors = validate_schema(config_data, schema, path="config")
             
             if not errors:
-                print(f"[✓] PASSED: {os.path.relpath(file_path)}")
+                print(f"[✓] PASSED: {os.path.relpath(abs_path)}")
             else:
                 all_passed = False
-                print(f"[✗] FAILED: {os.path.relpath(file_path)}")
+                print(f"[✗] FAILED: {os.path.relpath(abs_path)}")
                 for err in errors:
                     print(f"    - {err}")
         except Exception as e:

@@ -1,63 +1,98 @@
-# 04. Client Onboarding Guide & Intake Questionnaire
+# 04. Client Onboarding Guide & Escalation Protocol
 
-When an engineering team wants to onboard a new application or microservice to the ZIPPO platform, they must complete the **Service Intake Questionnaire**. The answers are used to generate the application specification (`config.yaml`), Terraform deployment manifests, and CI/CD pipelines.
+When an engineering team wants to onboard a new application or microservice to the platform, they must complete the **Service Intake Questionnaire**.
 
----
-
-## 1. The Intake Questionnaire (What Clients Must Answer)
-
-### Section A: Service Identity & Ownership
-1. **Service Identifier:** What is the lowercase kebab-case name of the service? (e.g., `zippo-billing`, `zippo-notifications`).
-2. **Repository Location:** GitHub organization and repo name (e.g., `epddp/ZIPPO-BILLING`).
-3. **Owning Team & Tech Lead:** Who is responsible for maintaining this application?
-
-### Section B: Container & Runtime Specifications
-4. **Technology Stack:** Node.js, Python, Go, Java, static HTML/Nginx, etc.?
-5. **Listening Port:** What TCP port does the application listen on? (e.g., `3000`, `8080`, `80`).
-6. **Dockerfile Path:** Location of the Dockerfile in the repository (default: `./Dockerfile`).
-7. **Resource Requirements:**
-   * Fargate CPU units needed (`256`, `512`, `1024`, `2048`, `4096`).
-   * Fargate Memory in MiB (`512`, `1024`, `2048`, `4096`, `8192`).
-   * Initial desired replica count (default: `1`).
-
-### Section C: Routing, Ingress & Health Checking
-8. **Health Check Endpoint:** What HTTP GET route returns `200 OK`? (e.g., `/healthz` or `/api/v1/health`).
-9. **Ingress Path Patterns:** What URL paths should route to this service from the shared Application Load Balancer? (e.g., `["/api/billing/*"]`).
-10. **ALB Routing Priority:** What integer priority should this rule have? (Must be unique across all services on the ALB, e.g. `20`).
-11. **Direct Port Requirement:** Does this service require its own dedicated external HTTPS port on the ALB? (e.g., port `3000` for admin or webhooks).
-
-### Section D: Sidecars & Internal Dependencies
-12. **Sidecar Containers:** Does the application require local in-task sidecars?
-    * Sidecar container name (e.g. `redis`, `log-shipper`).
-    * Image URI or ECR tag (e.g. `zippo-build:redis-alpine`).
-
-### Section E: Configuration Variables (SSM Parameter Store)
-13. **Environment Variables:** Provide a list of all non-sensitive configuration keys and their hierarchical paths in AWS SSM:
-    * Example: `LOG_LEVEL` -> `/zippo-billing/log_level` (String)
-    * Example: `PAYMENT_GATEWAY_URL` -> `/zippo-billing/gateway_url` (String)
-14. **Encrypted Environment Variables:** Provide a list of parameters requiring KMS decryption:
-    * Example: `WEBHOOK_SIGNING_KEY` -> `/zippo-billing/webhook_signing_key` (SecureString: true)
-
-### Section F: Sensitive Credentials (AWS Secrets Manager)
-15. **Secrets Manager References:** Provide the names of secrets stored in AWS Secrets Manager:
-    * Example: `BILLING_DB_URI`
-    * Example: `STRIPE_PRIVATE_KEY`
-
-### Section G: AWS Service Permissions (IAM Task Role)
-16. **Amazon SES:** Does the container need to send outbound transactional email? (`SES: true / false`).
-17. **Amazon S3:** Does the container need read/write/delete access to an S3 bucket? (`S3_BUCKET: "<bucket-name>"`).
-18. **Other AWS Services:** Does the service require access to SQS, DynamoDB, or SNS? (Requires platform team IAM extension).
+The platform provides a set of **predefined shared resources** (in `terraform.tfvars` and platform modules). If an application's requirements fit within these defaults, the onboarding is fully automated and self-service. If an application requires custom infrastructure outside these defaults, an **Escalation Request** to the Platform/Lifecycle team is triggered.
 
 ---
 
-## 2. Onboarding Workflow Checklist
+## 1. Predefined Platform Infrastructure Values
+
+The following resources are managed centrally by the Platform/Lifecycle team in `lifecycle/<env>/terraform.tfvars` and `iac/aws-epam-ecs`:
+
+| Resource | Predefined Platform Value | Source / Scope |
+| :--- | :--- | :--- |
+| **VPC** | Default AWS VPC | Platform Shared |
+| **Subnet IDs** | `subnet-00ad56e8430188864`, `subnet-0e5f81a05db138a8f`, `subnet-0127b88eb7ccd10ed` | `terraform.tfvars:subnet_ids` |
+| **ALB Security Group** | `sg-0b50f7bc21dea36a7` | `terraform.tfvars:alb_sg_id` |
+| **Tasks Security Group** | `epam-east-eu` | `data.aws_security_group.tasks` |
+| **Shared ALB** | `zippo-dev-alb` | `iac/aws-epam-ecs/vpc.tf` |
+| **Shared Cluster** | `cheap-ecs` (Fargate + Fargate Spot) | `iac/aws-epam-ecs/ecs.tf` |
+| **Shared Execution Role**| `cheap-ecs-exec` | `iac/aws-epam-ecs/rbac.tf` |
+| **IAM Role Boundary** | `arn:aws:iam::<account_id>:policy/eo_role_boundary` | Enforced on all task roles |
+| **Central Build ECR** | `<account_id>.dkr.ecr.<region>.amazonaws.com` | ECR repos: `zippo-build`, etc. |
+
+---
+
+## 2. The Intake Questionnaire & Escalation Matrix
+
+### Section A: Identity & Ownership
+1. **Service Identifier:** Kebab-case service name (e.g. `zippo-certs`).
+2. **Repository Location:** GitHub organization and repo name (e.g. `epddp/ZIPPO-CERTS`).
+3. **Owning Team & Tech Lead:** Service contact.
+
+---
+
+### Section B: Networking & Ingress (Escalation Check 1)
+4. **Standard Question:** What container port does the app listen on? (e.g. `3000`, `8080`).
+5. **Standard Question:** What ALB path pattern should route to this service? (e.g. `["/api/v1/certs/*"]`).
+6. **Standard Question:** What rule priority should it have? (e.g. `5` for specific routes before `/api/*`).
+7. **🚨 ESCALATION QUESTION:** *Does your service require a dedicated non-default VPC, private isolated subnets (no public IPs), or custom IP whitelist CIDRs on the ALB?*
+   * **If YES -> ESCALATION TO PLATFORM TEAM:**
+     * Platform team must provision dedicated subnets or update `alb_sg_id` (`sg-0b50f7bc21dea36a7`) in `lifecycle/<env>/terraform.tfvars`.
+     * The app deployment cannot proceed until the platform team allocates these IDs.
+8. **🚨 ESCALATION QUESTION:** *Does your service require a dedicated direct HTTPS port on the ALB (e.g., port 3000 or 8443) or a custom Route53 subdomain (e.g., `certs.zippo.dev`)?*
+   * **If YES -> ESCALATION TO PLATFORM TEAM:**
+     * Platform team must verify port availability and configure the listener certificate / Route 53 validation records in `ZIPPO-INFR/lifecycle/<env>`.
+
+---
+
+### Section C: Compute & Capacity (Escalation Check 2)
+9. **Standard Sizing:** Choose standard Fargate CPU (`256`, `512`, `1024`, `2048`) and Memory (`512`, `1024`, `2048`, `4096`).
+10. **🚨 ESCALATION QUESTION:** *Does your service require dedicated EC2 instances, GPU support, persistent EBS volumes, or compute > 4096 CPU units?*
+    * **If YES -> ESCALATION TO PLATFORM TEAM:**
+      * Shared cluster `cheap-ecs` only provides Fargate and Fargate Spot capacity.
+      * Platform team must configure an EC2 or custom capacity provider.
+
+---
+
+### Section D: Cloud Permissions & IAM Boundaries (Escalation Check 3)
+11. **Standard Self-Service Permissions:**
+    * Amazon SES email sending (`SES: true`).
+    * Amazon S3 bucket read/write (`S3_BUCKET: "zippo-files"`).
+    * SSM parameter store reads (`/service/*`).
+    * Secrets Manager secret reads (`JWT_SECRET`, `DB_URI`).
+12. **🚨 ESCALATION QUESTION:** *Does your application need access to AWS services outside the standard set (e.g., DynamoDB, SQS, SNS, RDS, KMS, or cross-account roles)?*
+    * **If YES -> ESCALATION TO PLATFORM TEAM:**
+      * All task roles are gated by the organizational permission boundary `eo_role_boundary`.
+      * Adding non-standard permissions requires the platform team to extend `iac/aws-epam-ecs-app/main.tf` or provide an approved inline IAM policy template.
+
+---
+
+## 3. The Onboarding Workflow (Standard vs. Escalated)
 
 ```
-  [ ] 1. Fill out Service Intake Questionnaire
-  [ ] 2. Generate deploy/<env>/config.yaml using template
-  [ ] 3. Validate config.yaml against schemas/app-config.schema.json
-  [ ] 4. Run Terraform test suite (app_contract.tftest.hcl) locally or in CI
-  [ ] 5. Platform Team provisions ECR repo & CodeBuild runner in ZIPPO-INFR
-  [ ] 6. Application Team commits deploy/ directory and .github/workflows/ci.yml
-  [ ] 7. Merge to main -> Automatic build, push, and Terraform apply
+                    ┌──────────────────────────────────────────────┐
+                    │ Client Completes Intake Questionnaire        │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                           Escalation Questions Triggered?
+                                           │
+                          ┌────────────────┴────────────────┐
+                          │                                 │
+                       [ YES ]                           [ NO ]
+                          │                                 │
+                          ▼                                 ▼
+           ┌─────────────────────────────┐   ┌─────────────────────────────┐
+           │ ESCALATION TICKET TO        │   │ SELF-SERVICE PATH:          │
+           │ PLATFORM TEAM:              │   │ • Use predefined VPC/SGs    │
+           │ • Allocate new subnets/SGs  │   │ • Generate config.yaml      │
+           │ • Add ECR repo & CodeBuild  │   │ • Validate with uv runner   │
+           │ • Extend IAM boundary       │   │ • Run tftests -> Apply      │
+           └──────────────┬──────────────┘   └─────────────────────────────┘
+                          │ (Platform Applies)
+                          ▼
+           ┌─────────────────────────────┐
+           │ App Team Resumes Onboarding │
+           └─────────────────────────────┘
 ```
