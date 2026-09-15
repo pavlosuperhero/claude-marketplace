@@ -10,6 +10,8 @@ A curated collection of production-grade plugins, skills, and templates for **Cl
 | :--- | :--- | :--- |
 | **`platform-ops`** | Spec-Driven Development (SDD) & Test-Driven Development (TDD) engine for containerized microservices and cloud infrastructure. | [`plugins/platform-ops`](plugins/platform-ops) |
 
+> **Currently Supported Stack:** **Node.js** projects running inside **AWS ECS (Fargate & Fargate Spot)** with a centralized **Amazon ECR** build artifactory.
+
 ---
 
 ## Installation Guide for Claude Code
