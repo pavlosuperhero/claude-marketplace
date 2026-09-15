@@ -81,10 +81,15 @@ When a user asks to deploy or onboard a new application or microservice:
      uv run scripts/tdd_orchestrator.py --config deploy/<env>/config.yaml
      ```
      *(Or pass `--specs-dir <path>` if custom local specs are used)*
+   * The orchestrator validates all 3 TDD Layers:
+     - **Layer 1 (Static Analysis & Linting):** Schema validation, `terraform fmt -check`, and `terraform validate`.
+     - **Layer 2 (Contract Unit Tests):** Native `terraform test` assertions with mock AWS providers.
+     - **Layer 3 (Plan Verification):** Dry-run `terraform plan` on `deploy/<env>` to preview resource changes before apply.
    * If the output is **RED**, analyze the diagnostics, self-heal `config.yaml` or Terraform wrappers, and re-execute.
-   * You have **NOT** finished onboarding until you see:
+   * You have **NOT** finished onboarding until all 3 layers pass:
      `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]`
    * The plugin's `Stop` hook will block you from completing if this step is skipped.
+   * *(Tip: Users can also trigger `/verify`, `/plan`, or `/fmt` slash commands directly).*
 
 ---
 

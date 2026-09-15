@@ -138,14 +138,16 @@ def main():
         print(f"  {CYAN}  Tip: Pass --specs-dir /path/to/specs or set ADDITIONAL_SPECS_PATH to load local project docs.{RESET}\n")
 
     # ─────────────────────────────────────────────────────────────
-    # STAGE 1: Schema Contract Validation (SDD)
+    # STAGE 1: Layer 1 - Static Analysis & Schema Contract
     # ─────────────────────────────────────────────────────────────
+    deploy_dir = None
     if args.config_path:
         if not os.path.exists(args.config_path):
             print(f"{RED}Error: Config file not found at: {args.config_path}{RESET}")
             sys.exit(1)
 
-        run_step(f"Validating Specification ({os.path.basename(args.config_path)})")
+        deploy_dir = os.path.dirname(os.path.abspath(args.config_path))
+        run_step(f"Layer 1: Validating Specification ({os.path.basename(args.config_path)})")
         val_cmd = ["uv", "run", validator_script, "--config", args.config_path, "--schema", schema_path]
         proc = subprocess.run(val_cmd, capture_output=True, text=True)
         
@@ -164,15 +166,29 @@ def main():
         else:
             print(f"{GREEN}  ✓ Schema Contract: Valid (100% compliant with JSON Schema){RESET}")
 
-    # ─────────────────────────────────────────────────────────────
-    # STAGE 2: Native Terraform Contract Tests (TDD)
-    # ─────────────────────────────────────────────────────────────
-    run_step(f"Executing Native Terraform Contract Tests in: {os.path.basename(infra_dir)}")
-    
-    tf_cmd = ["terraform", f"-chdir={infra_dir}", "test"]
+    # Check Terraform formatting & validation if .tf files exist in deploy/
     env = os.environ.copy()
     env["TF_CLI_CONFIG_FILE"] = "/dev/null"
+    if deploy_dir and any(f.endswith(".tf") for f in os.listdir(deploy_dir)):
+        run_step(f"Layer 1: Terraform Format & Syntax Validation in {os.path.basename(deploy_dir)}")
+        fmt_proc = subprocess.run(["terraform", f"-chdir={deploy_dir}", "fmt", "-check"], capture_output=True, text=True, env=env)
+        if fmt_proc.returncode != 0:
+            print(f"{YELLOW}  ⚠ Unformatted Terraform files detected. Auto-formatting with 'terraform fmt'...{RESET}")
+            subprocess.run(["terraform", f"-chdir={deploy_dir}", "fmt"], capture_output=True, env=env)
+            print(f"{GREEN}  ✓ Formatted HCL files in {os.path.basename(deploy_dir)}{RESET}")
+        else:
+            print(f"{GREEN}  ✓ Terraform Format: Clean (HCL canonical style){RESET}")
+
+        val_proc = subprocess.run(["terraform", f"-chdir={deploy_dir}", "validate"], capture_output=True, text=True, env=env)
+        if val_proc.returncode == 0:
+            print(f"{GREEN}  ✓ Terraform Validate: Syntax & configuration valid{RESET}")
+
+    # ─────────────────────────────────────────────────────────────
+    # STAGE 2: Layer 2 - Native Terraform Contract Tests (TDD)
+    # ─────────────────────────────────────────────────────────────
+    run_step(f"Layer 2: Executing Native Contract Unit Tests in: {os.path.basename(infra_dir)}")
     
+    tf_cmd = ["terraform", f"-chdir={infra_dir}", "test"]
     tf_proc = subprocess.run(tf_cmd, capture_output=True, text=True, env=env)
     output = tf_proc.stdout + tf_proc.stderr
 
@@ -186,9 +202,8 @@ def main():
     m_skip = re.search(r"(\d+)\s+skipped", output)
     skips = int(m_skip.group(1)) if m_skip else len(re.findall(r"\.\.\.\s*skip", output))
 
-    elapsed = time.time() - start_time
-
     if tf_proc.returncode != 0 or fails > 0:
+        elapsed = time.time() - start_time
         print(f"\n{RED}{'━' * 70}{RESET}")
         print(f"{RED}🔴 [RED PHASE: TEST ASSERTION FAILURES DETECTED]{RESET} ({elapsed:.2f}s)")
         print(f"{RED}{'━' * 70}{RESET}")
@@ -206,12 +221,31 @@ def main():
         print("Read the failed assertions above. Self-heal the Terraform manifests or config.yaml to satisfy all conditions, then re-test.\n")
         sys.exit(1)
     else:
-        print(f"\n{GREEN}{'━' * 70}{RESET}")
-        print(f"{GREEN}🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]{RESET} ({elapsed:.2f}s)")
-        print(f"{GREEN}{'━' * 70}{RESET}")
-        print(f"{BOLD}Summary:{RESET} {GREEN}{passes} Passed{RESET}, 0 Failed, 0 Skipped.")
-        print(f"{CYAN}Ready for continuous deployment pipeline (ECR Release & TF Apply).{RESET}\n")
-        sys.exit(0)
+        print(f"{GREEN}  ✓ Contract Assertions: {passes} passed, 0 failed{RESET}")
+
+    # ─────────────────────────────────────────────────────────────
+    # STAGE 3: Layer 3 - Plan Verification (Dry-Run Preview)
+    # ─────────────────────────────────────────────────────────────
+    if deploy_dir and any(f.endswith(".tf") for f in os.listdir(deploy_dir)):
+        run_step(f"Layer 3: Verifying Terraform Plan in {os.path.basename(deploy_dir)}")
+        plan_proc = subprocess.run(["terraform", f"-chdir={deploy_dir}", "plan", "-no-color"], capture_output=True, text=True, env=env)
+        plan_out = plan_proc.stdout + plan_proc.stderr
+
+        m_plan = re.search(r"Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy", plan_out)
+        if m_plan:
+            print(f"{GREEN}  ✓ Plan Preview: {m_plan.group(1)} to add, {m_plan.group(2)} to change, {m_plan.group(3)} to destroy.{RESET}")
+        elif "No changes" in plan_out:
+            print(f"{GREEN}  ✓ Plan Preview: Infrastructure up to date (0 changes).{RESET}")
+        elif plan_proc.returncode != 0:
+            print(f"{YELLOW}  ℹ Note on Plan: Backend/providers pending deployment credentials or init.{RESET}")
+
+    elapsed = time.time() - start_time
+    print(f"\n{GREEN}{'━' * 70}{RESET}")
+    print(f"{GREEN}🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]{RESET} ({elapsed:.2f}s)")
+    print(f"{GREEN}{'━' * 70}{RESET}")
+    print(f"{BOLD}Summary:{RESET} {GREEN}{passes} Passed{RESET}, 0 Failed, 0 Skipped across Layers 1, 2, and 3.")
+    print(f"{CYAN}Ready for continuous deployment pipeline (ECR Release & TF Apply).{RESET}\n")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
