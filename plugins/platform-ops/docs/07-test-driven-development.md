@@ -56,3 +56,13 @@ terraform -chdir=ZIPPO-INFR/iac/aws-epam-ecs test
 2. **Layer 2: Contract Unit Tests** (`terraform test` with mock providers).
 3. **Layer 3: Plan Verification** (`terraform plan`).
 4. **Layer 4: Deployment Execution** (`terraform apply -auto-approve`).
+
+---
+
+## 4. Security Recommendation: OIDC Federation
+
+> **Note:** The current CI/CD pipeline uses long-lived GitHub PATs for Terraform module access and implicit CodeBuild credentials for AWS API calls. For production hardening, consider migrating to:
+> * **GitHub Actions OIDC** with `aws-actions/configure-aws-credentials` using `role-to-assume` for short-lived, scoped AWS session tokens.
+> * **GitHub App Installation Tokens** instead of PATs for private module access, providing automatic rotation and fine-grained repository permissions.
+> * Enforce `eo_role_boundary` on all CI/CD assumed roles, not just ECS task roles.
+

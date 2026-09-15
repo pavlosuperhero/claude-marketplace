@@ -25,7 +25,7 @@ Create `ZIPPO-INFR/lifecycle/<env>/`:
 ### Step 2: Validate Environment Specification
 Run the schema validation against `schemas/environment.schema.json` and execute the environment contract test:
 ```bash
-terraform -chdir=zippo-specs/tests/tftests test -filter=env_contract.tftest.hcl
+terraform -chdir=tests/tftests test -filter=env_contract.tftest.hcl
 ```
 
 ### Step 3: Terraform Apply Infrastructure

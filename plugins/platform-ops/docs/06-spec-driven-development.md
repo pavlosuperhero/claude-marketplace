@@ -49,9 +49,9 @@ By using SDD, the **Specification** is the contract. Code generation and deploym
 
 ## 3. Schema Governance
 
-* The schema definition is stored in `zippo-specs/schemas/app-config.schema.json`.
+* The schema definition is stored in `schemas/app-config.schema.json`.
 * Validation is executed locally or in CI via:
   ```bash
-  python3 zippo-specs/tests/validate_configs.py <path-to-config.yaml>
+  uv run tests/validate_configs.py <path-to-config.yaml>
   ```
 * No Terraform code may be planned or applied if schema validation fails.

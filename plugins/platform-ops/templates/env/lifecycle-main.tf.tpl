@@ -19,7 +19,7 @@ terraform {
     bucket       = "zippo-terraform-state-bucket"
     key          = "zippo-{{ENVIRONMENT}}"
     region       = "eu-central-1"
-    encrypt      = false
+    encrypt      = true
     use_lockfile = true
   }
 }

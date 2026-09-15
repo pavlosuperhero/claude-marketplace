@@ -21,12 +21,12 @@ Obtain or confirm the environment parameters:
 
 ### Phase 2: Scaffold Environment in `ZIPPO-INFR/lifecycle/<env>/`
 Generate the environment configuration:
-- `main.tf` (from `zippo-specs/templates/env/lifecycle-main.tf.tpl`)
-- `terraform.tfvars` (from `zippo-specs/templates/env/terraform.tfvars.tpl`)
+- `main.tf` (from `templates/env/lifecycle-main.tf.tpl`)
+- `terraform.tfvars` (from `templates/env/terraform.tfvars.tpl`)
 - `variables.tf`
 
 ### Phase 3: Verify Schema & Contracts
-Validate against `zippo-specs/schemas/environment.schema.json`.
+Validate against `schemas/environment.schema.json`.
 Run the environment contract test:
 ```bash
 terraform -chdir=ZIPPO-INFR/iac/aws-epam-ecs test

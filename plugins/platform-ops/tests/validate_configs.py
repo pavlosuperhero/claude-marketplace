@@ -114,12 +114,26 @@ def parse_args():
         default=os.environ.get("ADDITIONAL_SPECS_PATH") or os.environ.get("PROJECT_SPECS_PATH"),
         help="Path to additional local specifications on PC to cross-reference (or env ADDITIONAL_SPECS_PATH)."
     )
+    parser.add_argument(
+        "-t", "--schema-type",
+        dest="schema_type",
+        choices=["app", "environment", "service"],
+        default="app",
+        help="Schema type to validate against: 'app' (default), 'environment', or 'service'."
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_schema = os.path.abspath(os.path.join(script_dir, "../schemas/app-config.schema.json"))
+
+    # Resolve schema path based on --schema-type or explicit --schema
+    schema_type_map = {
+        "app": "app-config.schema.json",
+        "environment": "environment.schema.json",
+        "service": "service-spec.schema.json",
+    }
+    default_schema = os.path.abspath(os.path.join(script_dir, "../schemas", schema_type_map[args.schema_type]))
     schema_path = args.schema_path or default_schema
 
     if not os.path.exists(schema_path):

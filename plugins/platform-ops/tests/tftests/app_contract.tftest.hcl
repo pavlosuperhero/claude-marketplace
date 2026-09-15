@@ -231,3 +231,74 @@ run "verify_sidecar_contract" {
     error_message = "Task definition must serialize defined sidecar containers"
   }
 }
+
+# 6. Verify SES Permission Contract
+run "verify_ses_permission_contract" {
+  command = apply
+
+  variables {
+    service_config = {
+      name = "contract-ses-app"
+      port = 8080
+      ses  = true
+    }
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.task_inline[0].policy, "ses:SendEmail")
+    error_message = "Task inline policy must include ses:SendEmail when SES is enabled"
+  }
+}
+
+# 7. Verify S3 Bucket Access Contract
+run "verify_s3_bucket_contract" {
+  command = apply
+
+  variables {
+    service_config = {
+      name      = "contract-s3-app"
+      port      = 8080
+      s3_bucket = "zippo-files"
+    }
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.task_inline[0].policy, "zippo-files")
+    error_message = "Task inline policy must reference the declared S3 bucket name"
+  }
+}
+
+# 8. Verify CloudWatch Log Group Naming Convention
+run "verify_log_group_contract" {
+  command = apply
+
+  assert {
+    condition     = aws_cloudwatch_log_group.this.name == "/ecs/contract-test-app"
+    error_message = "CloudWatch log group must follow naming convention /ecs/<service_config.name>"
+  }
+}
+
+# 9. Verify CPU and Memory Propagation
+run "verify_task_sizing_contract" {
+  command = apply
+
+  variables {
+    service_config = {
+      name   = "contract-sized-app"
+      port   = 8080
+      cpu    = 512
+      memory = 2048
+    }
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.this.cpu == "512"
+    error_message = "Task definition CPU must match service_config.cpu"
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.this.memory == "2048"
+    error_message = "Task definition memory must match service_config.memory"
+  }
+}
+

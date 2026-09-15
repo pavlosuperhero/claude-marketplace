@@ -1,10 +1,13 @@
 # Application Deployment Specification
-# Conforms to: zippo-specs/schemas/app-config.schema.json
+# Conforms to: schemas/app-config.schema.json
 NAME: {{APP_NAME}}
 PORT: {{APP_PORT}}
 HEALTH: "{{HEALTH_PATH}}"
+CPU: {{CPU_UNITS}}         # 256 | 512 | 1024 | 2048 | 4096
+MEMORY: {{MEMORY_MIB}}    # 512 | 1024 | 2048 | 3072 | 4096 | 5120 | 6144 | 7168 | 8192
+DESIRED_COUNT: {{DESIRED_COUNT}} # 0-20, default 1
 SES: {{ENABLE_SES}} # true | false
-# S3_BUCKET: "{{S3_BUCKET_NAME}}" # Optional
+S3_BUCKET: "{{S3_BUCKET_NAME}}" # S3 bucket name for PutObject/GetObject/DeleteObject access
 
 # Sidecars (optional, e.g. redis cache)
 # SIDECARS:
@@ -30,3 +33,4 @@ SECRETS:
   # Add AWS Secrets Manager secret identifiers:
   # - name: DB_URI
   # - name: JWT_SECRET
+
