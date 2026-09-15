@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zippo.epam.com/schemas/service-spec.schema.json",
+  "title": "ZippoServiceSpecification",
+  "description": "Master contract schema for onboarding a new application service to the ZIPPO platform",
+  "type": "object",
+  "required": ["serviceId", "displayName", "repository", "runtime", "environments"],
+  "properties": {
+    "serviceId": {
+      "type": "string",
+      "pattern": "^zippo-[a-z0-9-]+$",
+      "description": "Standardized service identifier (e.g. zippo-be, zippo-fe, zippo-notifications)"
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human readable name for the service"
+    },
+    "repository": {
+      "type": "object",
+      "required": ["owner", "name", "defaultBranch"],
+      "properties": {
+        "owner": { "type": "string", "default": "epddp" },
+        "name": { "type": "string" },
+        "defaultBranch": { "type": "string", "default": "main" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["type", "port", "dockerfile"],
+      "properties": {
+        "type": { "type": "string", "enum": ["node", "python", "go", "java", "static-nginx", "other"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "dockerfile": { "type": "string", "default": "Dockerfile" },
+        "healthEndpoint": { "type": "string", "pattern": "^/", "default": "/health" }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "description": "Environment specific deployment manifests keyed by environment name",
+      "required": ["dev"],
+      "additionalProperties": {
+        "$ref": "app-config.schema.json"
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "properties": {
+        "team": { "type": "string" },
+        "techLead": { "type": "string" },
+        "slackChannel": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

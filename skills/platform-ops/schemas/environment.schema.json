@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zippo.epam.com/schemas/environment.schema.json",
+  "title": "ZippoEnvironmentSpecification",
+  "description": "Schema for defining and validating a ZIPPO infrastructure environment (e.g. dev, stage, prod)",
+  "type": "object",
+  "required": ["environment", "awsRegion", "project", "network", "cluster", "alb"],
+  "properties": {
+    "environment": {
+      "type": "string",
+      "enum": ["dev", "stage", "prod", "preview", "qa"]
+    },
+    "awsRegion": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[a-z]+-[0-9]$",
+      "default": "eu-central-1"
+    },
+    "project": {
+      "type": "string",
+      "default": "zippo"
+    },
+    "network": {
+      "type": "object",
+      "required": ["subnetIds", "albSecurityGroupId", "tasksSecurityGroupName"],
+      "properties": {
+        "subnetIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^subnet-[a-z0-9]+$" },
+          "minItems": 2
+        },
+        "albSecurityGroupId": {
+          "type": "string",
+          "pattern": "^sg-[a-z0-9]+$"
+        },
+        "tasksSecurityGroupName": {
+          "type": "string"
+        }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "required": ["name", "capacityProviders"],
+      "properties": {
+        "name": { "type": "string" },
+        "capacityProviders": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["FARGATE", "FARGATE_SPOT"] }
+        }
+      }
+    },
+    "alb": {
+      "type": "object",
+      "required": ["name", "rootDomain", "idleTimeout"],
+      "properties": {
+        "name": { "type": "string" },
+        "rootDomain": { "type": "string" },
+        "zoneId": { "type": "string" },
+        "idleTimeout": { "type": "integer", "default": 120 }
+      }
+    },
+    "ciRunners": {
+      "type": "object",
+      "description": "CodeBuild ephemeral runners configuration",
+      "properties": {
+        "githubPatSecret": { "type": "string" },
+        "moduleSshKeySecret": { "type": "string" },
+        "runnerImages": {
+          "type": "object",
+          "properties": {
+            "node": { "type": "string" },
+            "terraform": { "type": "string" },
+            "builder": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

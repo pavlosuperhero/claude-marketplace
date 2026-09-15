@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zippo.epam.com/schemas/app-config.schema.json",
+  "title": "ZippoAppConfig",
+  "description": "Schema for validating application deployment configuration (deploy/<env>/config.yaml)",
+  "type": "object",
+  "required": ["NAME", "PORT"],
+  "properties": {
+    "NAME": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Internal identifier for the container/service (e.g. backend, frontend, auth-service)"
+    },
+    "PORT": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Port on which the application container listens"
+    },
+    "HEALTH": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Fallback HTTP health check path (e.g. / or /api/v1/health)"
+    },
+    "SES": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the app task role requires ses:SendEmail and ses:SendRawEmail permissions"
+    },
+    "S3_BUCKET": {
+      "type": "string",
+      "pattern": "^[a-z0-9.-]+$",
+      "description": "S3 bucket name to which the task role is granted PutObject/GetObject/DeleteObject access"
+    },
+    "CPU": {
+      "type": "integer",
+      "enum": [256, 512, 1024, 2048, 4096],
+      "default": 256,
+      "description": "Fargate Task CPU units"
+    },
+    "MEMORY": {
+      "type": "integer",
+      "enum": [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192],
+      "default": 1024,
+      "description": "Fargate Task Memory in MiB"
+    },
+    "DESIRED_COUNT": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 1,
+      "description": "Desired running task replica count"
+    },
+    "SIDECARS": {
+      "type": "array",
+      "description": "Optional sidecar container definitions running in the same task",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "ecr_image": {
+            "type": "string",
+            "description": "ECR image repository:tag relative to caller account ECR (e.g. zippo-build:redis-alpine)"
+          },
+          "image": {
+            "type": "string",
+            "description": "Public or full container image URI (e.g. redis:alpine)"
+          }
+        },
+        "oneOf": [
+          { "required": ["ecr_image"] },
+          { "required": ["image"] }
+        ]
+      }
+    },
+    "ALB": {
+      "type": "object",
+      "description": "Application Load Balancer routing configuration",
+      "properties": {
+        "health_check": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "HTTP health check endpoint path probed by the target group"
+        },
+        "path_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "ALB listener rule path patterns (e.g. ['/api/*'], ['/*'])"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50000,
+          "description": "ALB listener rule priority. Must be unique across services sharing the ALB."
+        },
+        "direct_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Direct HTTPS port on the ALB forwarded exclusively to this service (e.g. 3000)"
+        }
+      }
+    },
+    "ENV_VARS": {
+      "type": "array",
+      "description": "Environment variables populated from AWS Systems Manager (SSM) Parameter Store",
+      "items": {
+        "type": "object",
+        "required": ["name", "ssm_path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_]+$",
+            "description": "Environment variable name exposed to the container (e.g. DATABASE_NAME, REDIS_HOST)"
+          },
+          "ssm_path": {
+            "type": "string",
+            "pattern": "^/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*$",
+            "description": "Hierarchical SSM Parameter path (e.g. /zippo-be/database_name)"
+          },
+          "secure": {
+            "type": "boolean",
+            "default": false,
+            "description": "True if stored as SecureString (encrypted with KMS), False for plain String"
+          }
+        }
+      }
+    },
+    "SECRETS": {
+      "type": "array",
+      "description": "Sensitive credentials injected from AWS Secrets Manager",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9/_+=.@-]+$",
+            "description": "Name or ARN prefix of the secret in AWS Secrets Manager (e.g. JWT_SECRET, DB_URI)"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
