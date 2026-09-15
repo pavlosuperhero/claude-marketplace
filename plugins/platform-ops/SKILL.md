@@ -74,12 +74,17 @@ When a user asks to deploy or onboard a new application or microservice:
    * Generate `locals.tf`, `providers.tf`, `variables.tf`, and `versions.tf`.
    * Generate CI/CD workflow from `templates/app/ci-workflow.yml.tpl`.
 
-6. **Run Contract Tests (TDD):**
-   * Execute the Terraform contract test suite:
+6. **Run Contract Tests & Self-Heal (TDD) — 🛑 MANDATORY HARDGATE:**
+   * **DO NOT SKIP THIS STEP.** Generating files without executing tests is strictly prohibited.
+   * You **MUST** execute the TDD orchestrator using your Bash tool:
      ```bash
-     terraform -chdir=tests/tftests test -filter=app_contract.tftest.hcl
+     uv run scripts/tdd_orchestrator.py --config deploy/<env>/config.yaml
      ```
-   * Verify all assertions pass before merging or applying.
+     *(Or pass `--specs-dir <path>` if custom local specs are used)*
+   * If the output is **RED**, analyze the diagnostics, self-heal `config.yaml` or Terraform wrappers, and re-execute.
+   * You have **NOT** finished onboarding until you see:
+     `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]`
+   * The plugin's `Stop` hook will block you from completing if this step is skipped.
 
 ---
 
