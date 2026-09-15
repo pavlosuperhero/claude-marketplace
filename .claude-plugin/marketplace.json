@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-marketplace",
+  "description": "Curated collection of skills and templates for Claude Code",
+  "owner": {
+    "name": "Learning-and-templating"
+  },
+  "plugins": [
+    {
+      "name": "platform-ops",
+      "description": "Spec-Driven Development (SDD) and Test-Driven Development (TDD) engine for onboarding, templating, and deploying containerized microservices and cloud infrastructure environments using declarative contracts, JSON Schemas, and Terraform contract tests.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Learning-and-templating"
+      },
+      "source": {
+        "source": "dir",
+        "path": "skills/platform-ops"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "platform-ops",
+  "version": "1.0.0",
+  "description": "Spec-Driven Development (SDD) and Test-Driven Development (TDD) engine for onboarding, templating, and deploying containerized microservices and cloud infrastructure environments using declarative contracts, JSON Schemas, and Terraform contract tests.",
+  "author": {
+    "name": "Learning-and-templating"
+  }
+}
