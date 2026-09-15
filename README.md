@@ -63,11 +63,16 @@ Prompt Claude Code:
 > *"I want to onboard and deploy a new microservice named `order-service` on port 8080 with Redis cache."*
 
 The skill will:
-1. Conduct the 8-question intake interview.
+1. Conduct the intake interview (including Predefined Baseline & Escalation checks).
 2. Generate the declarative `deploy/<env>/config.yaml`.
-3. Validate the manifest against `schemas/app-config.schema.json`.
-4. Scaffold Terraform deployment wrappers (`main.tf`, `locals.tf`, `versions.tf`) and GitHub Actions CI workflow.
-5. Execute Terraform contract tests (`*.tftest.hcl`) with mock AWS providers.
+3. Validate the manifest with `uv run tests/validate_configs.py --config <file>`.
+4. Scaffold Terraform deployment wrappers (`main.tf`, `locals.tf`, `versions.tf`) and CI workflow.
+5. Execute the visual TDD Orchestrator:
+   ```bash
+   uv run scripts/tdd_orchestrator.py --config deploy/dev/config.yaml --infra-dir /path/to/infra/module
+   ```
+6. Self-heal any schema or assertion failures autonomously until `🟢 [GREEN]`.
+
 
 ### 2. Adding a New Infrastructure Environment
 > *"Scaffold a new `stage` environment for our platform."*
