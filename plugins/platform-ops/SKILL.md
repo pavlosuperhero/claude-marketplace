@@ -45,19 +45,24 @@ When a user asks to deploy or onboard a new application or microservice:
 1. **Check for Additional Local Specifications:**
    * Scan the local machine or prompt for any additional project specifications (e.g. `./Project_Specifications`, `zippo-specs/`, `--specs-dir <path>`, or `ADDITIONAL_SPECS_PATH`).
    * If local specs exist, inspect and cross-reference them:
-     - Read [09_NETWORKING_AND_INGRESS.md](09_NETWORKING_AND_INGRESS.md) for existing ALB rule priorities (e.g. `/api/v1/certs/*` at 5, `/api/*` at 10, `/*` at 100) to avoid collisions.
-     - Read [04_APPLICATION_DEPLOYMENT_CONFIG.md](04_APPLICATION_DEPLOYMENT_CONFIG.md) for sizing guidelines and baseline subnets.
-     - Read [07_IAM_SECURITY_AND_OIDC.md](07_IAM_SECURITY_AND_OIDC.md) for `eo_role_boundary` requirements.
-   * Auto-fill known parameters and only prompt the user for unique application-specific parameters.
+     - Read `<specs-dir>/09_NETWORKING_AND_INGRESS.md` for documented ALB rule priorities (e.g. `/api/v1/certs/*` at 5, `/api/*` at 10, `/*` at 100). Treat this as a **hint, not the source of truth** — a static doc drifts from what is actually deployed. The authoritative answer comes from the live sibling configs, via `tests/check_ingress_collisions.py`.
+     - Read `<specs-dir>/04_APPLICATION_DEPLOYMENT_CONFIG.md` for sizing guidelines and baseline subnets.
+     - Read `<specs-dir>/07_IAM_SECURITY_AND_OIDC.md` for `eo_role_boundary` requirements.
+   * Auto-fill known parameters and only prompt the user for unique application-specific parameters — **except `ALB.path_patterns` and `ALB.priority`, which are never auto-filled.** See Step 2.
 
 2. **Intake & Escalation Check:**
    Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):
    * Service identifier (`<service-name>`, kebab-case)
    * Container listening port (e.g. `3000`, `8080`) & health check path (e.g. `/healthz`)
-   * Ingress path patterns (e.g. `["/api/<service>/*"]`) & unique ALB rule priority
+   * Ingress path patterns (e.g. `["/api/<service>/*"]`) & unique ALB rule priority — **always ask explicitly; never infer, never copy from the template or a neighbouring service.** Then verify the answer against the live configs before generating anything:
+     ```bash
+     uv run tests/check_ingress_collisions.py --config <path-to-config.yaml>
+     ```
+     Catching this at intake costs one question. Catching it at `terraform apply` costs an outage.
    * Task sizing (CPU units, memory in MiB, desired replica count)
    * Sidecars (e.g. redis cache), SES/S3 permissions, SSM parameters, and secrets.
    * **🚨 ESCALATION TRIGGERS:** If the service requires non-default subnets, dedicated security group ingress CIDRs, dedicated direct ALB ports, or IAM permissions beyond SES/S3/SSM/Secrets (e.g., DynamoDB, SQS), pause self-service generation and output an **Escalation Request** for the Platform Team.
+   * **🚨 ESCALATION TRIGGERS (ingress):** Also pause and escalate if the service would claim a **catch-all** (`/*`), take a `path_patterns` or `priority` already held by another service, or sit behind an existing catch-all at a lower priority number. Each of these decides which service receives traffic. See *Ingress ownership is never yours to decide* below.
 
 3. **Generate Specification Contract:**
    * Create `deploy/<env>/config.yaml` using the template at `templates/app/config.yaml.tpl`.
@@ -133,15 +138,54 @@ When generating, validating, or fixing configurations against failing tests:
    uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module> [--specs-dir <path-to-local-specs>]
    ```
 
-2. **Diagnose Failures (Red State):**
-   * If **Schema Violation:** Inspect reported missing properties, disallowed port ranges, or malformed SSM paths against `schemas/app-config.schema.json`.
-   * If **Terraform Assertion Failure:** Read the failed assertion from `tests/tftests/*.tftest.hcl` (e.g., ALB routing rule priority collision, missing health check path, or ungranted S3/SES permissions).
+2. **Honour the exit-code contract.** It decides whether you may act autonomously:
 
-3. **Apply Surgical Patch:**
+   | Exit | Verdict | Your action |
+   |------|---------|-------------|
+   | `0` + `🟢 GREEN` | every layer verified | Proceed. |
+   | `0` + `🟡 PARTIAL` | tests passed, some layer **did not run** | **Do not call this verified.** Report verbatim which layers did not run and why. |
+   | `1` + `🔴 RED` | a real defect | Self-heal per Step 4, then re-run. |
+   | `2` + `🟣 ESCALATION` | conflict only a human can resolve | **STOP. Do not edit any file.** Relay the options and wait. |
+
+3. **Never convert a 🟡 PARTIAL into a claim of success.** `terraform plan` (Layer 3) and `terraform validate` require `terraform init` plus valid AWS credentials. When those are absent the orchestrator prints a `DIAGNOSTIC:` block with `failure_class` and `disposition: BLOCKED`, and the summary lists the layer under **NOT verified**. Say so explicitly — "Layer 3 did not run: blocked by NOT_INITIALIZED" — rather than reporting the run as complete. A layer that was skipped proved nothing.
+
+4. **Diagnose Failures (Red State):**
+   * Read the `DIAGNOSTIC:` block first. Its `failure_class` and `remediation` fields are authoritative; do not re-derive a theory from raw output when a class is already named.
+   * If `disposition: BLOCKED`, the problem is the **environment**, not the code. Fix that (`terraform init`, credentials) and re-run. Do **not** edit manifests — zero assertions ran, so nothing has been shown wrong.
+   * If **Schema Violation:** Inspect reported missing properties, disallowed port ranges, or malformed SSM paths against `schemas/app-config.schema.json`.
+   * If **Terraform Assertion Failure:** Read the failed assertion from the `*.tftest.hcl` in the module under test (e.g. missing health check path, or ungranted S3/SES permissions).
+
+5. **Apply Surgical Patch:**
    * Formulate the fix hypothesis.
    * Patch only the offending attributes in `config.yaml` or Terraform wrappers.
    * Avoid full rewrites; preserve existing verified configuration.
 
-4. **Re-Execute Loop Until Green:**
+6. **Re-Execute Loop Until Green:**
    * Re-run `uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module>`.
-   * Repeat autonomously until `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]` is emitted.
+   * Repeat autonomously until `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]` is emitted — **unless** the run exited `2` (escalation) or ended `🟡 PARTIAL`. Those two states are terminal for autonomous work: report and stop.
+
+---
+
+### Ingress ownership is never yours to decide
+
+`ALB.priority` and `path_patterns` must be unique across every service sharing the ALB. The JSON Schema cannot enforce this — it sees one file at a time — so the orchestrator runs a cross-service check in Layer 1:
+
+```bash
+uv run tests/check_ingress_collisions.py --config <path-to-config.yaml>
+```
+
+Exit `2` means a **HARD** collision: duplicate priority (AWS rejects the apply with `PriorityInUse`), a duplicate path pattern, or a catch-all shadowing this service.
+
+**Reassigning a path pattern or priority decides which service receives production traffic, and for a catch-all it decides which service goes dark. That is a product decision, not a formatting fix.** When the checker escalates:
+
+1. **First, check whether the two are even different applications.** The checker compares config files; it cannot see that two directories are the same codebase. Before relaying options, compare the colliding repos:
+   ```bash
+   git -C <repo-a> remote get-url origin; git -C <repo-b> remote get-url origin
+   git -C <repo-a> rev-parse HEAD;         git -C <repo-b> rev-parse HEAD
+   ```
+   Same remote or same HEAD means this is **one application about to be deployed twice** — a rename, a migration, or a stray working copy. Coexist-vs-replace is then the wrong question; ask why it is deployed twice and which name is intended to survive. Say plainly that the two are identical rather than presenting them as peer services.
+2. Relay the checker's enumerated options (coexist / replace / invert / defer) to the human verbatim.
+3. State the blast radius of each — which URLs break, which target group stops receiving traffic.
+4. Stop. Resume only after the human states a choice explicitly.
+
+Never pick a free priority to make the pipeline go green. A green pipeline that silently displaced a live service is a worse outcome than a blocked one. New service configs are frequently copied from an existing service, so an inherited `/*` at the same priority is a template artifact — treat it as unspecified intent, not as an expressed decision.
