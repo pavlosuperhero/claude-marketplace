@@ -1,13 +1,25 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "claude-marketplace",
-  "version": "1.0.0",
-  "description": "Curated collection of production-grade skills and templates for Claude Code and AI coding assistants.",
-  "skills": [
+  "description": "Curated directory of production-grade plugins, skills, and templates for Claude Code",
+  "owner": {
+    "name": "pavlosuperhero"
+  },
+  "plugins": [
     {
       "name": "platform-ops",
       "description": "Spec-Driven Development (SDD) and Test-Driven Development (TDD) engine for onboarding, templating, and deploying containerized microservices and cloud infrastructure environments using declarative contracts, JSON Schemas, and Terraform contract tests.",
-      "path": "skills/platform-ops",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "author": {
+        "name": "pavlosuperhero"
+      },
+      "category": "development",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/pavlosuperhero/claude-marketplace.git",
+        "path": "plugins/platform-ops"
+      },
+      "homepage": "https://github.com/pavlosuperhero/claude-marketplace"
     }
   ]
 }

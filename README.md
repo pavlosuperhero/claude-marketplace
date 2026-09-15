@@ -1,6 +1,6 @@
 # claude-marketplace
 
-A curated collection of production-grade skills, templates, and plugins for **Claude Code** and AI coding assistants.
+A curated collection of production-grade plugins, skills, and templates for **Claude Code** and AI coding assistants.
 
 ---
 
@@ -8,86 +8,47 @@ A curated collection of production-grade skills, templates, and plugins for **Cl
 
 | Plugin / Skill | Description | Location |
 | :--- | :--- | :--- |
-| **`platform-ops`** | Spec-Driven Development (SDD) & Test-Driven Development (TDD) engine for containerized microservices and cloud infrastructure. | [`skills/platform-ops`](skills/platform-ops) |
+| **`platform-ops`** | Spec-Driven Development (SDD) & Test-Driven Development (TDD) engine for containerized microservices and cloud infrastructure. | [`plugins/platform-ops`](plugins/platform-ops) |
 
 ---
 
 ## Installation Guide for Claude Code
 
-You can install and use the `platform-ops` skill in Claude Code using any of the methods below.
+Install and use the `platform-ops` plugin directly from this GitHub marketplace:
 
-### Method 1: Add Marketplace via Claude Code CLI (Recommended)
+### Step 1: Add Marketplace to Claude Code
 
-1. **Add the Marketplace:**
-   ```bash
-   claude plugin marketplace add Learning-and-templating/claude-marketplace
-   ```
-   *Or using SSH git URL:*
-   ```bash
-   claude plugin marketplace add git@github.com:Learning-and-templating/claude-marketplace.git
-   ```
-
-2. **Install the `platform-ops` Plugin:**
-   ```bash
-   claude plugin install platform-ops@claude-marketplace
-   ```
-
-3. **Verify Installation:**
-   ```bash
-   claude plugin list
-   ```
-
----
-
-### Method 2: Configure in `~/.claude/` Manually
-
-If you prefer configuring your global Claude Code settings manually:
-
-1. **Register the Marketplace:**
-   Open `~/.claude/plugins/known_marketplaces.json` and add `claude-marketplace`:
-   ```json
-   {
-     "claude-plugins-official": {
-       "source": {
-         "source": "github",
-         "repo": "anthropics/claude-plugins-official"
-       },
-       "installLocation": "/Users/<your-user>/.claude/plugins/marketplaces/claude-plugins-official",
-       "lastUpdated": "2026-08-25T13:06:35.765Z"
-     },
-     "claude-marketplace": {
-       "source": {
-         "source": "github",
-         "repo": "Learning-and-templating/claude-marketplace"
-       },
-       "installLocation": "/path/to/claude-marketplace",
-       "lastUpdated": "2026-09-15T12:00:00.000Z"
-     }
-   }
-   ```
-
-2. **Enable in `~/.claude/settings.json`:**
-   ```json
-   {
-     "enabledPlugins": {
-       "platform-ops@claude-marketplace": true
-     }
-   }
-   ```
-
----
-
-### Method 3: Direct Project / Workspace Installation
-
-To use `platform-ops` as a project-level skill without global marketplace installation:
-
+Run the Claude Code CLI command:
 ```bash
-# From within your project root:
-mkdir -p .claude/skills
-cp -r /path/to/claude-marketplace/skills/platform-ops .claude/skills/
+claude plugin marketplace add pavlosuperhero/claude-marketplace
 ```
 
-Claude Code will automatically detect `.claude/skills/platform-ops/SKILL.md` for your project workspace.
+*Or using the Git HTTPS URL:*
+```bash
+claude plugin marketplace add https://github.com/pavlosuperhero/claude-marketplace.git
+```
+
+*Or using SSH:*
+```bash
+claude plugin marketplace add git@github.com:pavlosuperhero/claude-marketplace.git
+```
+
+---
+
+### Step 2: Install the `platform-ops` Plugin
+
+```bash
+claude plugin install platform-ops@claude-marketplace
+```
+
+---
+
+### Step 3: Verify Installation
+
+Check that the plugin is installed and active:
+```bash
+claude plugin list
+```
 
 ---
 
@@ -96,7 +57,7 @@ Claude Code will automatically detect `.claude/skills/platform-ops/SKILL.md` for
 Once installed, Claude Code can autonomously execute end-to-end platform workflows:
 
 ### 1. Onboarding a New Microservice (Spec-Driven)
-Simply prompt Claude Code:
+Prompt Claude Code:
 > *"I want to onboard and deploy a new microservice named `order-service` on port 8080 with Redis cache."*
 
 The skill will:
@@ -122,17 +83,19 @@ The skill will:
 ```
 claude-marketplace/
 ├── .claude-plugin/
-│   └── marketplace.json                  # Official marketplace registry catalog
-├── skills/
-│   └── platform-ops/                     # The platform-ops skill & plugin
+│   └── marketplace.json                  # Official marketplace registry catalog (git-subdir sources)
+├── marketplace.json                      # Root marketplace manifest
+├── plugins/
+│   └── platform-ops/                     # The platform-ops plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json               # Plugin metadata
-│       ├── SKILL.md                      # Claude Code skill definition (< 500 lines)
+│       ├── skills/
+│       │   └── platform-ops/
+│       │       └── SKILL.md              # Claude Code skill entrypoint (< 500 lines)
 │       ├── docs/                         # In-depth architectural & operational guides
 │       ├── schemas/                      # JSON Schemas for configs and environments
 │       ├── templates/                    # Jinja/HCL/YAML templates for apps and envs
 │       ├── tests/                        # Native Terraform tests & schema validators
 │       └── prompts/                      # Ready-to-use LLM scaffolding prompts
-├── marketplace.json                      # Root marketplace manifest
 └── README.md                             # Marketplace documentation & install guide
 ```
