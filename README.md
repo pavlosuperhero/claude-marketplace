@@ -38,7 +38,7 @@ claude plugin marketplace add git@github.com:pavlosuperhero/claude-marketplace.g
 ### Step 2: Install the `platform-ops` Plugin
 
 ```bash
-claude plugin install platform-ops@claude-marketplace
+claude plugin install platform-ops@pavlo-marketplace
 ```
 
 ---
