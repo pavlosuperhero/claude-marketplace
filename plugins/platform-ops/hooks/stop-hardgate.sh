@@ -33,4 +33,14 @@ if [ -f "$VALIDATOR" ]; then
   fi
 fi
 
+# 4. Check if Terraform files exist and are formatted
+DEPLOY_DIR=$(dirname "$CONFIG_FILE")
+if [ -d "$DEPLOY_DIR" ] && compgen -G "$DEPLOY_DIR/*.tf" > /dev/null; then
+  if ! TF_CLI_CONFIG_FILE=/dev/null terraform -chdir="$DEPLOY_DIR" fmt -check >/dev/null 2>&1; then
+    echo "❌ [HARDGATE BLOCKED]: Terraform files in '$DEPLOY_DIR' fail canonical style formatting!" >&2
+    echo "👉 ACTION REQUIRED: Run 'terraform fmt' in '$DEPLOY_DIR' before concluding." >&2
+    exit 2
+  fi
+fi
+
 exit 0
