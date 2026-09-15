@@ -10,15 +10,18 @@ if echo "$INPUT" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; th
   exit 0
 fi
 
-# 2. Check if any deploy/ config.yaml exists in the current project
-CONFIG_FILE=$(find deploy -name "config.yaml" 2>/dev/null | head -n 1 || true)
+# 2. Determine the project root (prefer CLAUDE_PROJECT_ROOT, fall back to CWD)
+PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
+
+# 3. Check if any deploy/ config.yaml exists in the project
+CONFIG_FILE=$(find "$PROJECT_ROOT" -maxdepth 4 -path "*/deploy/*/config.yaml" 2>/dev/null | head -n 1 || true)
 
 if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
   # No deployment configuration present in this repo, allow stop
   exit 0
 fi
 
-# 3. Check if the config passes schema validation
+# 4. Check if the config passes schema validation
 VALIDATOR="${PLUGIN_ROOT}/tests/validate_configs.py"
 if [ -f "$VALIDATOR" ]; then
   VAL_OUTPUT=$(uv run "$VALIDATOR" --config "$CONFIG_FILE" 2>&1 || true)
@@ -33,7 +36,7 @@ if [ -f "$VALIDATOR" ]; then
   fi
 fi
 
-# 4. Check if Terraform files exist and are formatted
+# 5. Check if Terraform files exist and are formatted
 DEPLOY_DIR=$(dirname "$CONFIG_FILE")
 if [ -d "$DEPLOY_DIR" ] && compgen -G "$DEPLOY_DIR/*.tf" > /dev/null; then
   if ! TF_CLI_CONFIG_FILE=/dev/null terraform -chdir="$DEPLOY_DIR" fmt -check >/dev/null 2>&1; then

@@ -5,10 +5,14 @@ set -e
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 INPUT=$(cat || true)
 
-# Extract file path from env var or stdin JSON
+# Extract file path from env var or stdin JSON (try multiple key names)
 FILE_PATH="${CLAUDE_TOOL_INPUT_FILE_PATH:-}"
 if [ -z "$FILE_PATH" ] && [ -n "$INPUT" ]; then
-  FILE_PATH=$(echo "$INPUT" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d'"' -f4 || true)
+  FILE_PATH=$(echo "$INPUT" | grep -oE '"(TargetFile|file_path|path|target_file)"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | cut -d'"' -f4 || true)
+fi
+# Fallback: check tool output for written file path
+if [ -z "$FILE_PATH" ]; then
+  FILE_PATH="${CLAUDE_TOOL_OUTPUT_FILE_PATH:-}"
 fi
 
 # Check if target is a deployment manifest
