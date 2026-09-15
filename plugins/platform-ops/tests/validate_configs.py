@@ -13,11 +13,16 @@ import json
 try:
     import yaml
 except ImportError:
-    # Fallback to python in venv if present
-    venv_py = os.path.join(os.path.dirname(__file__), "../../ZIPPO-INFR/.venv/bin/python3")
-    if os.path.exists(venv_py) and sys.executable != os.path.abspath(venv_py):
-        os.execv(venv_py, [venv_py] + sys.argv)
+    # Search parent directories for a virtualenv containing PyYAML
+    cur = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(6):
+        for sub in ["ZIPPO-INFR/.venv/bin/python3", ".venv/bin/python3"]:
+            candidate = os.path.join(cur, sub)
+            if os.path.exists(candidate) and sys.executable != os.path.abspath(candidate):
+                os.execv(candidate, [candidate] + sys.argv)
+        cur = os.path.dirname(cur)
     raise
+
 
 def validate_schema(instance, schema, path="root"):
     errors = []
