@@ -101,3 +101,28 @@ Follow the dynamic provisioning pattern in [03-deployment-process.md](docs/03-de
 1. Add the variable or secret entry to `config.yaml` (`ENV_VARS` or `SECRETS`).
 2. Run `python3 tests/validate_configs.py <path-to-config.yaml>`.
 3. Provision the resource via the automated CI workflow dispatch.
+
+---
+
+### Workflow D: The Self-Healing TDD Loop (AI Orchestrator)
+When generating, validating, or fixing configurations against failing tests:
+
+1. **Trigger Orchestrator Runner:**
+   Run the automated TDD orchestrator:
+   ```bash
+   python3 scripts/tdd_orchestrator.py <path-to-config.yaml>
+   ```
+
+2. **Diagnose Failures (Red State):**
+   * If **Schema Violation:** Inspect reported missing properties, disallowed port ranges, or malformed SSM paths against `schemas/app-config.schema.json`.
+   * If **Terraform Assertion Failure:** Read the failed assertion from `tests/tftests/*.tftest.hcl` (e.g., ALB routing rule priority collision, missing health check path, or ungranted S3/SES permissions).
+
+3. **Apply Surgical Patch:**
+   * Formulate the fix hypothesis.
+   * Patch only the offending attributes in `config.yaml` or Terraform wrappers.
+   * Avoid full rewrites; preserve existing verified configuration.
+
+4. **Re-Execute Loop Until Green:**
+   * Re-run `python3 scripts/tdd_orchestrator.py <path-to-config.yaml>`.
+   * Repeat autonomously until `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]` is emitted.
+
