@@ -1,0 +1,13 @@
+{
+  "name": "claude-marketplace",
+  "version": "1.0.0",
+  "description": "Curated collection of production-grade skills and templates for Claude Code and AI coding assistants.",
+  "skills": [
+    {
+      "name": "platform-ops",
+      "description": "Spec-Driven Development (SDD) and Test-Driven Development (TDD) engine for onboarding, templating, and deploying containerized microservices and cloud infrastructure environments using declarative contracts, JSON Schemas, and Terraform contract tests.",
+      "path": "skills/platform-ops",
+      "version": "1.0.0"
+    }
+  ]
+}
