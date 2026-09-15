@@ -19,7 +19,7 @@ terraform {
     bucket       = "example-terraform-state-bucket"
     key          = "example-{{ENVIRONMENT}}"
     region       = "eu-central-1"
-    encrypt      = false
+    encrypt      = true
     use_lockfile = true
   }
 }

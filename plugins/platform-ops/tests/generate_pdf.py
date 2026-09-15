@@ -5,6 +5,7 @@ Reads the specification markdown documents and compiles them into a styled multi
 """
 
 import os
+import sys
 import subprocess
 import glob
 import re

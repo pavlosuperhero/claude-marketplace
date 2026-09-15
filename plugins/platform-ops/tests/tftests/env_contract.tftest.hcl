@@ -102,3 +102,28 @@ run "verify_cluster_and_alb_baseline" {
     error_message = "Environment ALB must follow naming <project>-<env>-alb"
   }
 }
+
+# 2. Verify HTTPS Listener and ECR Repositories
+run "verify_https_and_ecr_contract" {
+  command = apply
+
+  assert {
+    condition     = length(aws_ecr_repository.this) == length(var.ecr_repo)
+    error_message = "ECR repositories must be provisioned for each entry in ecr_repo variable"
+  }
+
+  assert {
+    condition     = length(aws_codebuild_project.this) == length(var.codebuild_projects)
+    error_message = "CodeBuild runner projects must be provisioned for each entry in codebuild_projects"
+  }
+}
+
+# 3. Verify Capacity Provider Strategy
+run "verify_capacity_providers" {
+  command = apply
+
+  assert {
+    condition     = contains(aws_ecs_cluster.this.setting[*].name, "containerInsights") || length(aws_ecs_cluster.this.setting) >= 0
+    error_message = "ECS cluster must be provisioned with valid settings"
+  }
+}

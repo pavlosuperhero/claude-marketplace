@@ -243,7 +243,7 @@ def main():
     print(f"\n{GREEN}{'━' * 70}{RESET}")
     print(f"{GREEN}🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]{RESET} ({elapsed:.2f}s)")
     print(f"{GREEN}{'━' * 70}{RESET}")
-    print(f"{BOLD}Summary:{RESET} {GREEN}{passes} Passed{RESET}, 0 Failed, 0 Skipped across Layers 1, 2, and 3.")
+    print(f"{BOLD}Summary:{RESET} {GREEN}{passes} Passed{RESET}, 0 Failed, {skips} Skipped across Layers 1, 2, and 3.")
     print(f"{CYAN}Ready for continuous deployment pipeline (ECR Release & TF Apply).{RESET}\n")
     sys.exit(0)
 

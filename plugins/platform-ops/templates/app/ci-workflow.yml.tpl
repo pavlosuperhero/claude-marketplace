@@ -95,6 +95,9 @@ jobs:
         run: terraform -chdir=deploy/dev validate
       - name: Terraform Plan
         run: terraform -chdir=deploy/dev plan
+      - name: Cleanup Git Credentials
+        if: always()
+        run: git config --global --unset-all url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf || true
 
   terraform-apply:
     name: Terraform Apply
@@ -113,3 +116,6 @@ jobs:
         run: terraform -chdir=deploy/dev init -upgrade
       - name: Terraform Apply
         run: terraform -chdir=deploy/dev apply -auto-approve
+      - name: Cleanup Git Credentials
+        if: always()
+        run: git config --global --unset-all url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf || true

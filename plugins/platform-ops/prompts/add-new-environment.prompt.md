@@ -21,12 +21,12 @@ Obtain or confirm the environment parameters:
 
 ### Phase 2: Scaffold Environment in `example-INFR/lifecycle/<env>/`
 Generate the environment configuration:
-- `main.tf` (from `example-specs/templates/env/lifecycle-main.tf.tpl`)
-- `terraform.tfvars` (from `example-specs/templates/env/terraform.tfvars.tpl`)
+- `main.tf` (from `templates/env/lifecycle-main.tf.tpl`)
+- `terraform.tfvars` (from `templates/env/terraform.tfvars.tpl`)
 - `variables.tf`
 
 ### Phase 3: Verify Schema & Contracts
-Validate against `example-specs/schemas/environment.schema.json`.
+Validate against `schemas/environment.schema.json`.
 Run the environment contract test:
 ```bash
 terraform -chdir=example-INFR/iac/ecs-environment-module test

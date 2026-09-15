@@ -21,7 +21,20 @@ if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
   exit 0
 fi
 
-# 4. Check if the config passes schema validation
+# 4. Verify required tools are available
+if ! command -v uv &>/dev/null; then
+  echo "⚠️  [HARDGATE WARNING]: 'uv' is not installed. Cannot run schema validation." >&2
+  echo "👉 Install uv (https://docs.astral.sh/uv/) or run validation manually." >&2
+  exit 2
+fi
+
+if ! command -v terraform &>/dev/null; then
+  echo "⚠️  [HARDGATE WARNING]: 'terraform' is not installed. Cannot verify deployment formatting." >&2
+  echo "👉 Install Terraform (https://developer.hashicorp.com/terraform/install) or run checks manually." >&2
+  exit 2
+fi
+
+# 5. Check if the config passes schema validation
 VALIDATOR="${PLUGIN_ROOT}/tests/validate_configs.py"
 if [ -f "$VALIDATOR" ]; then
   VAL_OUTPUT=$(uv run "$VALIDATOR" --config "$CONFIG_FILE" 2>&1 || true)
@@ -36,7 +49,7 @@ if [ -f "$VALIDATOR" ]; then
   fi
 fi
 
-# 5. Check if Terraform files exist and are formatted
+# 6. Check if Terraform files exist and are formatted
 DEPLOY_DIR=$(dirname "$CONFIG_FILE")
 if [ -d "$DEPLOY_DIR" ] && compgen -G "$DEPLOY_DIR/*.tf" > /dev/null; then
   if ! TF_CLI_CONFIG_FILE=/dev/null terraform -chdir="$DEPLOY_DIR" fmt -check >/dev/null 2>&1; then
