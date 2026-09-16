@@ -96,9 +96,10 @@ claude-marketplace/
 │   └── platform-ops/                     # The platform-ops plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json               # Plugin metadata
+│       ├── SKILL.md                     # Plugin-level index (routes to skills, prompts, commands)
 │       ├── skills/
 │       │   └── platform-ops/
-│       │       └── SKILL.md              # Claude Code skill entrypoint (< 500 lines)
+│       │       └── SKILL.md              # Full SDD/TDD skill instructions
 │       ├── docs/                         # In-depth architectural & operational guides
 │       ├── schemas/                      # JSON Schemas for configs and environments
 │       ├── templates/                    # Jinja/HCL/YAML templates for apps and envs
