@@ -42,13 +42,13 @@ Before performing actions, refer to the authoritative specification documents:
 ### Workflow A: Onboard a New Application Service
 When a user asks to deploy or onboard a new application or microservice:
 
-1. **Check for Additional Local Specifications:**
-   * Scan the local machine or prompt for any additional project specifications (e.g. `./Project_Specifications`, `zippo-specs/`, `--specs-dir <path>`, or `ADDITIONAL_SPECS_PATH`).
-   * If local specs exist, inspect and cross-reference them:
-     - Read `<specs-dir>/09_NETWORKING_AND_INGRESS.md` for documented ALB rule priorities (e.g. `/api/v1/certs/*` at 5, `/api/*` at 10, `/*` at 100). Treat this as a **hint, not the source of truth** — a static doc drifts from what is actually deployed. The authoritative answer comes from the live sibling configs, via `tests/check_ingress_collisions.py`.
-     - Read `<specs-dir>/04_APPLICATION_DEPLOYMENT_CONFIG.md` for sizing guidelines and baseline subnets.
-     - Read `<specs-dir>/07_IAM_SECURITY_AND_OIDC.md` for `eo_role_boundary` requirements.
-   * Auto-fill known parameters and only prompt the user for unique application-specific parameters — **except `ALB.path_patterns` and `ALB.priority`, which are never auto-filled.** See Step 2.
+1. **Check for Additional Specifications (optional context enrichment):**
+   * The primary spec source is **Confluence via MCP** (when available) or an explicitly configured `--specs-dir <path>` / `ADDITIONAL_SPECS_PATH` env var. Local directory auto-discovery (`Project_Specifications/`, `zippo-specs/`) is a convenience fallback — the tool probes those names as a hint if nothing else is configured.
+   * If a specs directory is available from any of the above sources, scan it for context. Look for:
+     - **Networking/ingress docs** — any existing ALB rule priorities and path patterns. Treat these as hints only, **not the source of truth**; a static doc drifts from what is actually deployed. The authoritative answer comes from the live sibling configs via `tests/check_ingress_collisions.py`.
+     - **Sizing/deployment docs** — CPU/memory baselines, desired replica counts, subnet guidance.
+     - **IAM/security docs** — permission boundary requirements (e.g. `eo_role_boundary`), allowed permission scopes.
+   * Auto-fill known parameters from discovered context and only prompt the user for unique application-specific parameters — **except `ALB.path_patterns` and `ALB.priority`, which are never auto-filled.** See Step 2.
 
 2. **Intake & Escalation Check:**
    Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):

@@ -8,7 +8,7 @@ An autonomous, production-grade **Spec-Driven Development (SDD)** and **Test-Dri
 
 > **Currently Supported Stack:**
 > * **Runtime:** **Node.js** projects (e.g., NestJS, Express, React/Node SSR) running as containerized tasks inside **AWS ECS (Fargate & Fargate Spot)**.
-> * **Artifact Management:** Centralized **Amazon ECR (Elastic Container Registry)** serving as the build artifactory for service images (`<account-id>.dkr.ecr.<region>.amazonaws.com/<service>`) and shared base runner images (`zippo-build:*`).
+> * **Artifact Management:** Centralized **Amazon ECR (Elastic Container Registry)** serving as the build artifactory for service images (`<account-id>.dkr.ecr.<region>.amazonaws.com/<service>`) and shared builder cache images (`<project>-build:*`).
 > * **Ingress:** AWS Application Load Balancer (ALB) with path-based HTTPS routing and target group health checking.
 > * **Configuration & Secrets:** AWS Systems Manager (SSM) Parameter Store (plain and KMS SecureString) and AWS Secrets Manager.
 > * **CI/CD:** Ephemeral AWS CodeBuild runners integrated directly with GitHub Actions via `WORKFLOW_JOB_QUEUED` webhooks.
@@ -39,9 +39,15 @@ An autonomous, production-grade **Spec-Driven Development (SDD)** and **Test-Dri
 platform-ops/
 ├── .claude-plugin/
 │   └── plugin.json                       # Claude Code plugin manifest
+├── SKILL.md                              # Claude Code skill definition (primary, used by marketplace)
 ├── skills/
 │   └── platform-ops/
-│       └── SKILL.md                      # Claude Code skill definition (< 500 lines)
+│       └── SKILL.md                      # Alternate skill path (legacy; kept for compatibility)
+├── hooks/
+│   ├── hooks.json                        # Hook definitions (PostToolUse, Stop)
+│   ├── post-tool-hardgate.sh             # Fires after any file write — enforces TDD run on deploy/ changes
+│   ├── pre-tool-guard.sh                 # PreToolUse safety checks
+│   └── stop-hardgate.sh                  # Blocks session stop until schema + fmt pass (exits 2 on failure)
 ├── docs/
 │   ├── 01-architecture-overview.md       # Topology and traffic flow
 │   ├── 02-lifecycle-vs-app-roles.md      # Platform vs. Application boundary matrix
@@ -54,12 +60,15 @@ platform-ops/
 │   ├── app-config.schema.json            # JSON Schema for deploy/<env>/config.yaml
 │   ├── service-spec.schema.json          # Master service onboarding schema
 │   └── environment.schema.json           # Environment lifecycle schema
+├── scripts/
+│   └── tdd_orchestrator.py               # 3-layer TDD runner (schema → contract tests → plan)
 ├── templates/
 │   ├── app/                              # Microservice deployment templates
 │   └── env/                              # Environment lifecycle templates
 ├── tests/
 │   ├── tftests/                          # Native Terraform tests (app_contract, env_contract)
-│   └── validate_configs.py               # Self-contained YAML schema validator
+│   ├── validate_configs.py               # Self-contained YAML schema validator
+│   └── check_ingress_collisions.py       # Cross-service ALB priority collision checker
 └── prompts/
     ├── scaffold-new-app.prompt.md        # Prompt for onboarding new microservices
     └── add-new-environment.prompt.md     # Prompt for creating new environments

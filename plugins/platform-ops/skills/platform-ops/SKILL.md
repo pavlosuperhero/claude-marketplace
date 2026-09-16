@@ -42,13 +42,13 @@ Before performing actions, refer to the authoritative specification documents:
 ### Workflow A: Onboard a New Application Service
 When a user asks to deploy or onboard a new application or microservice:
 
-1. **Check for Additional Local Specifications:**
-   * Scan the local machine or prompt for any additional project specifications (e.g. `./Project_Specifications`, `zippo-specs/`, `--specs-dir <path>`, or `ADDITIONAL_SPECS_PATH`).
-   * If local specs exist, inspect and cross-reference them:
-     - Read [09_NETWORKING_AND_INGRESS.md](09_NETWORKING_AND_INGRESS.md) for existing ALB rule priorities (e.g. `/api/v1/certs/*` at 5, `/api/*` at 10, `/*` at 100) to avoid collisions.
-     - Read [04_APPLICATION_DEPLOYMENT_CONFIG.md](04_APPLICATION_DEPLOYMENT_CONFIG.md) for sizing guidelines and baseline subnets.
-     - Read [07_IAM_SECURITY_AND_OIDC.md](07_IAM_SECURITY_AND_OIDC.md) for `eo_role_boundary` requirements.
-   * Auto-fill known parameters and only prompt the user for unique application-specific parameters.
+1. **Check for Additional Specifications (optional context enrichment):**
+   * The primary spec source is **Confluence via MCP** (when available) or an explicitly configured `--specs-dir <path>` / `ADDITIONAL_SPECS_PATH` env var. Local directory auto-discovery (`Project_Specifications/`, `zippo-specs/`) is a convenience fallback hint — probed only if nothing else is configured.
+   * If a specs directory is available, scan it for context. Look for:
+     - **Networking/ingress docs** — existing ALB rule priorities and path patterns (hints only; authoritative answer is always the live sibling configs).
+     - **Sizing/deployment docs** — CPU/memory baselines, desired replica counts, subnet guidance.
+     - **IAM/security docs** — permission boundary requirements, allowed permission scopes.
+   * Auto-fill known parameters from discovered context and only prompt the user for unique application-specific parameters.
 
 2. **Intake & Escalation Check:**
    Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):
