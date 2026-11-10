@@ -14,7 +14,7 @@ This skill automates and governs the lifecycle of microservices and cloud infras
 > [!NOTE]
 > **Currently Supported Stack:**
 > * **Application Runtime:** **Node.js** projects (NestJS, Express, React/Nginx SSR) running inside **AWS ECS Fargate & Fargate Spot**.
-> * **Build Artifactory:** Centralized **Amazon ECR** repositories (`<account-id>.dkr.ecr.<region>.amazonaws.com/<service>`) for release images and builder cache images (`example-build:*`).
+> * **Build Artifactory:** Centralized **Amazon ECR** repositories (`<account-id>.dkr.ecr.<region>.amazonaws.com/<service>`) for release images and builder cache images (`<builder-ecr-repository>:*`).
 > * **Ingress & Traffic:** AWS Application Load Balancer (ALB) with path-based HTTPS routing and target group health probes.
 > * **Secrets & Configuration:** AWS Systems Manager (SSM) Parameter Store (plain and SecureString) and AWS Secrets Manager.
 > * **CI/CD:** Ephemeral AWS CodeBuild runners integrated via GitHub Actions `WORKFLOW_JOB_QUEUED` webhooks.
@@ -26,14 +26,14 @@ This skill automates and governs the lifecycle of microservices and cloud infras
 
 Before performing actions, refer to the authoritative specification documents:
 
-* **Platform Architecture & Topology:** [01-architecture-overview.md](docs/01-architecture-overview.md)
-* **Lifecycle vs. Application Boundaries:** [02-lifecycle-vs-app-roles.md](docs/02-lifecycle-vs-app-roles.md)
-* **Continuous Deployment Workflow:** [03-deployment-process.md](docs/03-deployment-process.md)
-* **Client Onboarding & Escalation Protocol:** [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md)
-* **Environment Provisioning Guide:** [05-environment-guide.md](docs/05-environment-guide.md)
-* **Spec-Driven Methodology:** [06-spec-driven-development.md](docs/06-spec-driven-development.md)
-* **Test-Driven Infrastructure & Contracts:** [07-test-driven-development.md](docs/07-test-driven-development.md)
-* **JSON Schema Definitions:** [app-config.schema.json](schemas/app-config.schema.json) | [service-spec.schema.json](schemas/service-spec.schema.json) | [environment.schema.json](schemas/environment.schema.json)
+* **Platform Architecture & Topology:** [01-architecture-overview.md](${CLAUDE_PLUGIN_ROOT}/docs/01-architecture-overview.md)
+* **Lifecycle vs. Application Boundaries:** [02-lifecycle-vs-app-roles.md](${CLAUDE_PLUGIN_ROOT}/docs/02-lifecycle-vs-app-roles.md)
+* **Continuous Deployment Workflow:** [03-deployment-process.md](${CLAUDE_PLUGIN_ROOT}/docs/03-deployment-process.md)
+* **Client Onboarding & Escalation Protocol:** [04-client-onboarding-guide.md](${CLAUDE_PLUGIN_ROOT}/docs/04-client-onboarding-guide.md)
+* **Environment Provisioning Guide:** [05-environment-guide.md](${CLAUDE_PLUGIN_ROOT}/docs/05-environment-guide.md)
+* **Spec-Driven Methodology:** [06-spec-driven-development.md](${CLAUDE_PLUGIN_ROOT}/docs/06-spec-driven-development.md)
+* **Test-Driven Infrastructure & Contracts:** [07-test-driven-development.md](${CLAUDE_PLUGIN_ROOT}/docs/07-test-driven-development.md)
+* **JSON Schema Definitions:** [app-config.schema.json](${CLAUDE_PLUGIN_ROOT}/schemas/app-config.schema.json) | [service-spec.schema.json](${CLAUDE_PLUGIN_ROOT}/schemas/service-spec.schema.json) | [environment.schema.json](${CLAUDE_PLUGIN_ROOT}/schemas/environment.schema.json)
 
 ---
 
@@ -43,20 +43,20 @@ Before performing actions, refer to the authoritative specification documents:
 When a user asks to deploy or onboard a new application or microservice:
 
 1. **Check for Additional Specifications (optional context enrichment):**
-   * The primary spec source is **Confluence via MCP** (when available) or an explicitly configured `--specs-dir <path>` / `ADDITIONAL_SPECS_PATH` env var. Local directory auto-discovery (`Project_Specifications/`, `example-specs/`) is a convenience fallback — the tool probes those names as a hint if nothing else is configured.
+   * The primary spec source is **Confluence via MCP** (when available) or an explicitly configured `--specs-dir <path>` / `ADDITIONAL_SPECS_PATH` env var. Local directory auto-discovery (`Project_Specifications/`) is a convenience fallback — the tool probes those names as a hint if nothing else is configured.
    * If a specs directory is available from any of the above sources, scan it for context. Look for:
-     - **Networking/ingress docs** — any existing ALB rule priorities and path patterns. Treat these as hints only, **not the source of truth**; a static doc drifts from what is actually deployed. The authoritative answer comes from the live sibling configs via `tests/check_ingress_collisions.py`.
+     - **Networking/ingress docs** — any existing ALB rule priorities and path patterns. Treat these as hints only, **not the source of truth**; a static doc drifts from what is actually deployed. The authoritative answer comes from the live sibling configs via `${CLAUDE_PLUGIN_ROOT}/tests/check_ingress_collisions.py`.
      - **Sizing/deployment docs** — CPU/memory baselines, desired replica counts, subnet guidance.
      - **IAM/security docs** — permission boundary requirements (e.g. `example-task-boundary`), allowed permission scopes.
    * Auto-fill known parameters from discovered context and only prompt the user for unique application-specific parameters — **except `ALB.path_patterns` and `ALB.priority`, which are never auto-filled.** See Step 2.
 
 2. **Intake & Escalation Check:**
-   Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](docs/04-client-onboarding-guide.md):
+   Prompt the user for the remaining intake answers in [04-client-onboarding-guide.md](${CLAUDE_PLUGIN_ROOT}/docs/04-client-onboarding-guide.md):
    * Service identifier (`<service-name>`, kebab-case)
    * Container listening port (e.g. `3000`, `8080`) & health check path (e.g. `/healthz`)
    * Ingress path patterns (e.g. `["/api/<service>/*"]`) & unique ALB rule priority — **always ask explicitly; never infer, never copy from the template or a neighbouring service.** Then verify the answer against the live configs before generating anything:
      ```bash
-     uv run tests/check_ingress_collisions.py --config <path-to-config.yaml>
+     uv run "${CLAUDE_PLUGIN_ROOT}/tests/check_ingress_collisions.py" --config <path-to-config.yaml>
      ```
      Catching this at intake costs one question. Catching it at `terraform apply` costs an outage.
    * Task sizing (CPU units, memory in MiB, desired replica count)
@@ -65,25 +65,26 @@ When a user asks to deploy or onboard a new application or microservice:
    * **🚨 ESCALATION TRIGGERS (ingress):** Also pause and escalate if the service would claim a **catch-all** (`/*`), take a `path_patterns` or `priority` already held by another service, or sit behind an existing catch-all at a lower priority number. Each of these decides which service receives traffic. See *Ingress ownership is never yours to decide* below.
 
 3. **Generate Specification Contract:**
-   * Create `deploy/<env>/config.yaml` using the template at `templates/app/config.yaml.tpl`.
+   * Create `deploy/<env>/config.yaml` using the template at `${CLAUDE_PLUGIN_ROOT}/templates/app/config.yaml.tpl`.
 
 4. **Validate Against JSON Schema (via `uv`):**
    * Run the validator script with `uv run` (including `--specs-dir` check):
      ```bash
-     uv run tests/validate_configs.py --config <target-repo>/deploy/<env>/config.yaml --specs-dir <local-specs-path>
+     uv run "${CLAUDE_PLUGIN_ROOT}/tests/validate_configs.py" --config <target-repo>/deploy/<env>/config.yaml --specs-dir <local-specs-path>
      ```
    * Enforce schema compliance before generating or applying Terraform code.
 
 5. **Scaffold Deployment Manifests:**
-   * Generate `deploy/<env>/main.tf` from `templates/app/main.tf.tpl`.
+   * Resolve the project, module source, state bucket/key/region, and runner settings using [Configuration](${CLAUDE_PLUGIN_ROOT}/README.md#configuration).
+   * Generate `deploy/<env>/main.tf` from `${CLAUDE_PLUGIN_ROOT}/templates/app/main.tf.tpl`.
    * Generate `locals.tf`, `providers.tf`, `variables.tf`, and `versions.tf`.
-   * Generate CI/CD workflow from `templates/app/ci-workflow.yml.tpl`.
+   * Generate CI/CD workflow from `${CLAUDE_PLUGIN_ROOT}/templates/app/ci-workflow.yml.tpl`.
 
 6. **Run Contract Tests & Self-Heal (TDD) — 🛑 MANDATORY HARDGATE:**
    * **DO NOT SKIP THIS STEP.** Generating files without executing tests is strictly prohibited.
    * You **MUST** execute the TDD orchestrator using your Bash tool:
      ```bash
-     uv run scripts/tdd_orchestrator.py --config deploy/<env>/config.yaml
+     uv run "${CLAUDE_PLUGIN_ROOT}/scripts/tdd_orchestrator.py" --config deploy/<env>/config.yaml --infra-dir <path-to-app-module>
      ```
      *(Or pass `--specs-dir <path>` if custom local specs are used)*
    * The orchestrator validates all 3 TDD Layers:
@@ -93,7 +94,7 @@ When a user asks to deploy or onboard a new application or microservice:
    * If the output is **RED**, analyze the diagnostics, self-heal `config.yaml` or Terraform wrappers, and re-execute.
    * You have **NOT** finished onboarding until all 3 layers pass:
      `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]`
-   * The plugin's `Stop` hook will block you from completing if this step is skipped.
+   * The `Stop` hook checks schema and formatting. Use the orchestrator output to confirm all three layers ran.
    * *(Tip: Users can also trigger `/verify`, `/plan`, or `/fmt` slash commands directly).*
 
 ---
@@ -102,29 +103,29 @@ When a user asks to deploy or onboard a new application or microservice:
 When adding or provisioning a new environment (`stage`, `prod`, `qa`, `preview`):
 
 1. **Intake Phase:**
-   Follow [05-environment-guide.md](docs/05-environment-guide.md) to gather VPC subnets, ALB security groups, and DNS/Route 53 parameters.
+   Follow [05-environment-guide.md](${CLAUDE_PLUGIN_ROOT}/docs/05-environment-guide.md) to gather VPC subnets, ALB security groups, and DNS/Route 53 parameters.
 
 2. **Scaffold Lifecycle Platform:**
-   * Create `lifecycle/<new-env>/main.tf` from `templates/env/lifecycle-main.tf.tpl`.
-   * Create `terraform.tfvars` from `templates/env/terraform.tfvars.tpl`.
+   * Create `lifecycle/<new-env>/main.tf` from `${CLAUDE_PLUGIN_ROOT}/templates/env/lifecycle-main.tf.tpl`.
+   * Create `terraform.tfvars` from `${CLAUDE_PLUGIN_ROOT}/templates/env/terraform.tfvars.tpl`.
 
 3. **Validate & Test:**
-   * Validate against `schemas/environment.schema.json`.
+   * Validate against `${CLAUDE_PLUGIN_ROOT}/schemas/environment.schema.json`.
    * Run environment contract tests:
      ```bash
-     terraform -chdir=tests/tftests test -filter=env_contract.tftest.hcl
+     terraform -chdir="<path-to-env-module>" test -filter=env_contract.tftest.hcl
      ```
 
 4. **Replicate Microservice Deployments:**
    * Scaffold `deploy/<new-env>/` across all microservices using verified templates.
-   * Run `uv run tests/validate_configs.py --config <file>` across all created manifests.
+   * Run `uv run "${CLAUDE_PLUGIN_ROOT}/tests/validate_configs.py" --config <file>` across all created manifests.
 
 ---
 
 ### Workflow C: Add a New Secret or Environment Variable
-Follow the dynamic provisioning pattern in [03-deployment-process.md](docs/03-deployment-process.md):
+Follow the dynamic provisioning pattern in [03-deployment-process.md](${CLAUDE_PLUGIN_ROOT}/docs/03-deployment-process.md):
 1. Add the variable or secret entry to `config.yaml` (`ENV_VARS` or `SECRETS`).
-2. Run `uv run tests/validate_configs.py --config <path-to-config.yaml>`.
+2. Run `uv run "${CLAUDE_PLUGIN_ROOT}/tests/validate_configs.py" --config <path-to-config.yaml>`.
 3. Provision the resource via the automated CI workflow dispatch in the infra repo.
 
 ---
@@ -135,7 +136,7 @@ When generating, validating, or fixing configurations against failing tests:
 1. **Trigger Orchestrator Runner via `uv`:**
    Run the visual TDD orchestrator with CLI flags (automatically discovers local specs or pass `--specs-dir`):
    ```bash
-   uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module> [--specs-dir <path-to-local-specs>]
+   uv run "${CLAUDE_PLUGIN_ROOT}/scripts/tdd_orchestrator.py" --config <path-to-config.yaml> --infra-dir <path-to-infra-module> [--specs-dir <path-to-local-specs>]
    ```
 
 2. **Honour the exit-code contract.** It decides whether you may act autonomously:
@@ -152,7 +153,7 @@ When generating, validating, or fixing configurations against failing tests:
 4. **Diagnose Failures (Red State):**
    * Read the `DIAGNOSTIC:` block first. Its `failure_class` and `remediation` fields are authoritative; do not re-derive a theory from raw output when a class is already named.
    * If `disposition: BLOCKED`, the problem is the **environment**, not the code. Fix that (`terraform init`, credentials) and re-run. Do **not** edit manifests — zero assertions ran, so nothing has been shown wrong.
-   * If **Schema Violation:** Inspect reported missing properties, disallowed port ranges, or malformed SSM paths against `schemas/app-config.schema.json`.
+   * If **Schema Violation:** Inspect reported missing properties, disallowed port ranges, or malformed SSM paths against `${CLAUDE_PLUGIN_ROOT}/schemas/app-config.schema.json`.
    * If **Terraform Assertion Failure:** Read the failed assertion from the `*.tftest.hcl` in the module under test (e.g. missing health check path, or ungranted S3/SES permissions).
 
 5. **Apply Surgical Patch:**
@@ -161,7 +162,7 @@ When generating, validating, or fixing configurations against failing tests:
    * Avoid full rewrites; preserve existing verified configuration.
 
 6. **Re-Execute Loop Until Green:**
-   * Re-run `uv run scripts/tdd_orchestrator.py --config <path-to-config.yaml> --infra-dir <path-to-infra-module>`.
+   * Re-run `uv run "${CLAUDE_PLUGIN_ROOT}/scripts/tdd_orchestrator.py" --config <path-to-config.yaml> --infra-dir <path-to-infra-module>`.
    * Repeat autonomously until `🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]` is emitted — **unless** the run exited `2` (escalation) or ended `🟡 PARTIAL`. Those two states are terminal for autonomous work: report and stop.
 
 ---
@@ -171,7 +172,7 @@ When generating, validating, or fixing configurations against failing tests:
 `ALB.priority` and `path_patterns` must be unique across every service sharing the ALB. The JSON Schema cannot enforce this — it sees one file at a time — so the orchestrator runs a cross-service check in Layer 1:
 
 ```bash
-uv run tests/check_ingress_collisions.py --config <path-to-config.yaml>
+uv run "${CLAUDE_PLUGIN_ROOT}/tests/check_ingress_collisions.py" --config <path-to-config.yaml>
 ```
 
 Exit `2` means a **HARD** collision: duplicate priority (AWS rejects the apply with `PriorityInUse`), a duplicate path pattern, or a catch-all shadowing this service.

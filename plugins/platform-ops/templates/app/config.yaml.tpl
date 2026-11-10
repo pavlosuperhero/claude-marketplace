@@ -7,12 +7,12 @@ CPU: {{CPU_UNITS}}         # 256 | 512 | 1024 | 2048 | 4096
 MEMORY: {{MEMORY_MIB}}    # 512 | 1024 | 2048 | 3072 | 4096 | 5120 | 6144 | 7168 | 8192
 DESIRED_COUNT: {{DESIRED_COUNT}} # 0-20, default 1
 SES: {{ENABLE_SES}} # true | false
-S3_BUCKET: "{{S3_BUCKET_NAME}}" # S3 bucket name for PutObject/GetObject/DeleteObject access
+# S3_BUCKET: "{{S3_BUCKET_NAME}}" # S3 bucket name for PutObject/GetObject/DeleteObject access
 
 # Sidecars (optional, e.g. redis cache)
 # SIDECARS:
 #   - name: redis
-#     ecr_image: "example-build:redis-alpine"
+#     ecr_image: "{{BUILDER_ECR_REPOSITORY}}:redis-alpine"
 
 ALB:
   health_check: "{{HEALTH_PATH}}"
@@ -29,8 +29,8 @@ ENV_VARS:
   #   ssm_path: "/{{SERVICE_ID}}/database_name"
   #   secure: false
 
-SECRETS:
-  # Add AWS Secrets Manager secret identifiers:
+SECRETS: []
+  # Replace [] with a list of AWS Secrets Manager secret identifiers:
   # - name: DB_URI
   # - name: JWT_SECRET
 

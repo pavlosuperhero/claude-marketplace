@@ -1,5 +1,5 @@
 module "app" {
-  source = "git::https://github.com/example-org/example-infra.git//iac/ecs-app-module?ref=main"
+  source = "{{APP_MODULE_SOURCE}}"
 
   project        = "{{PROJECT_NAME}}"
   region         = var.region

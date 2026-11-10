@@ -1,6 +1,6 @@
 # 02. Levels of Responsibility: Lifecycle vs. App
 
-In the example platform architecture, responsibility is strictly partitioned between two distinct organizational and technical domains: **Lifecycle (Platform Infrastructure)** and **Application (Service Teams)**.
+In the platform architecture, responsibility is strictly partitioned between two distinct organizational and technical domains: **Lifecycle (Platform Infrastructure)** and **Application (Service Teams)**.
 
 ---
 
@@ -12,7 +12,7 @@ In the example platform architecture, responsibility is strictly partitioned bet
 | **Shared Application Load Balancer** | **OWNER** | *Consumer* |
 | **Route 53 & ACM TLS Certificates** | **OWNER** | *Consumer* |
 | **ECS Cluster & Capacity Providers** | **OWNER** | *Consumer* |
-| **Shared Task Execution Role (`example-ecs-exec`)** | **OWNER** | *Consumer* |
+| **Shared Task Execution Role (`<execution-role>`)** | **OWNER** | *Consumer* |
 | **CodeBuild GitHub Actions Runners** | **OWNER** | *Consumer* |
 | **Database Engines (MongoDB AMI/EC2)** | **OWNER** | *Consumer* |
 | **Reusable App Module (`ecs-app-module`)** | **OWNER** | *Consumer* |
@@ -30,15 +30,15 @@ In the example platform architecture, responsibility is strictly partitioned bet
 
 ### When is Lifecycle Responsible?
 1. **Initial Platform Bootstrap:**
-   * Allocating subnets, configuring internet gateways, NAT routing, and baseline security groups (`tasks-security-group`, `alb-sg`).
+   * Allocating subnets, configuring internet gateways, NAT routing, and baseline security groups (`<tasks-security-group>`, `alb-sg`).
    * Provisioning the shared Application Load Balancer, default HTTP-to-HTTPS redirect listener, and default 404 handler.
    * Acquiring ACM TLS certificates and configuring domain validation.
 2. **Cluster & Compute Provisioning:**
-   * Managing the ECS Cluster (`example-ecs`).
+   * Managing the ECS Cluster (`<ecs-cluster>`).
    * Configuring capacity provider strategies (`FARGATE` vs. `FARGATE_SPOT` weights).
 3. **Execution-Level IAM & Secrets Plumbing:**
-   * Creating and updating the execution role (`example-ecs-exec`) required by the AWS ECS Agent to pull private ECR images, create CloudWatch streams, and decrypt SSM parameters with AWS KMS.
-   * Creating secret shells in AWS Secrets Manager for CI/CD tokens (`github-token-secret`, `module-ssh-key-secret`).
+   * Creating and updating the execution role (`<execution-role>`) required by the AWS ECS Agent to pull private ECR images, create CloudWatch streams, and decrypt SSM parameters with AWS KMS.
+   * Creating secret shells in AWS Secrets Manager for CI/CD tokens (`<github-token-secret>`, `<module-ssh-key-secret>`).
 4. **Shared Pipeline Runners:**
    * Provisioning CodeBuild runner projects with webhook filters listening to `WORKFLOW_JOB_QUEUED`.
    * Building and caching base runner Docker images (e.g., node runner, terraform runner).
@@ -57,11 +57,11 @@ In the example platform architecture, responsibility is strictly partitioned bet
    * Defining ALB routing path patterns (e.g. `path_patterns: ["/api/*"]`) and listener rule priority.
    * Declaring required sidecar containers (e.g. `redis-alpine`).
 2. **Environment Variables & Secrets:**
-   * Declaring non-sensitive variables mapped from SSM Parameter Store (`/example-be/*`).
+   * Declaring non-sensitive variables mapped from SSM Parameter Store (`/backend/*`).
    * Declaring sensitive secrets injected into container environment from AWS Secrets Manager (`JWT_SECRET`, `DB_URI`).
 3. **App Task Permissions:**
    * Enabling AWS SES access (`SES: true`) if the service sends transactional email.
-   * Specifying S3 bucket access (`S3_BUCKET: "example-files"`) if the service handles file uploads.
+   * Specifying S3 bucket access (`S3_BUCKET: "example-service-files"`) if the service handles file uploads.
 4. **Packaging & Delivery:**
    * Maintaining a secure, multi-stage `Dockerfile`.
    * Executing unit, integration, and lint tests in the CI workflow.

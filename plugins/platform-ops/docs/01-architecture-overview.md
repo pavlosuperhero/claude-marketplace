@@ -2,10 +2,10 @@
 
 ## 1. Executive Summary
 
-example is a containerized microservices platform running on Amazon Web Services (AWS) in the `eu-central-1` (Frankfurt) region. The system separates the operational topology into two decoupled layers:
+Platform Ops targets containerized microservices on Amazon Web Services (AWS) in a configured region. The system separates the operational topology into two decoupled layers:
 
-1. **The Lifecycle / Platform Foundation (`example-INFR`):** Shared, persistent infrastructure providing networking, load balancing, DNS, TLS termination, container orchestration clusters, shared execution IAM roles, and self-hosted CI/CD runners.
-2. **The Microservice Application Layer (`example-BE`, `example-FE`, etc.):** Decoupled repositories hosting application logic, Docker containers, declarative deployment manifests (`config.yaml`), and dedicated ECS services.
+1. **The Lifecycle / Platform Foundation (`<infra-repo>`):** Shared, persistent infrastructure providing networking, load balancing, DNS, TLS termination, container orchestration clusters, shared execution IAM roles, and self-hosted CI/CD runners.
+2. **The Microservice Application Layer (`backend`, `frontend`, etc.):** Decoupled repositories hosting application logic, Docker containers, declarative deployment manifests (`config.yaml`), and dedicated ECS services.
 
 ```
                              INTERNET TRAFFIC
@@ -26,7 +26,7 @@ example is a containerized microservices platform running on Amazon Web Services
                │                            │
                ▼                            ▼
        ┌───────────────┐            ┌───────────────┐
-       │   example-be    │            │   example-fe    │
+       │   backend     │            │   frontend    │
        │ Target Group  │            │ Target Group  │
        └───────┬───────┘            └───────┬───────┘
                │ (port: 3000)               │ (port: 80)
@@ -54,13 +54,13 @@ example is a containerized microservices platform running on Amazon Web Services
 
 | Component | Responsibility | Repository / Module |
 | :--- | :--- | :--- |
-| **Shared Network & ALB** | Default VPC, public subnets, ingress ALB, ACM TLS cert, port 443 listener rules | `example-INFR/iac/ecs-environment-module` |
-| **ECS Cluster** | `example-ecs` cluster with `FARGATE` and `FARGATE_SPOT` capacity providers | `example-INFR/iac/ecs-environment-module/ecs.tf` |
-| **Application Module** | Standardized, reusable Terraform module generating task definitions, roles, services, and target groups | `example-INFR/iac/ecs-app-module` |
-| **CI/CD Runners** | Ephemeral GitHub Actions runners on AWS CodeBuild with dedicated VPC access and ECR pull cache | `example-INFR/iac/ecs-environment-module/codebuild.tf` |
+| **Shared Network & ALB** | Default VPC, public subnets, ingress ALB, ACM TLS cert, port 443 listener rules | `<env-module>` |
+| **ECS Cluster** | `<ecs-cluster>` cluster with `FARGATE` and `FARGATE_SPOT` capacity providers | `<env-module>/ecs.tf` |
+| **Application Module** | Standardized, reusable Terraform module generating task definitions, roles, services, and target groups | `<app-module>` |
+| **CI/CD Runners** | Ephemeral GitHub Actions runners on AWS CodeBuild with dedicated VPC access and ECR pull cache | `<env-module>/codebuild.tf` |
 | **Configuration Store** | AWS Systems Manager (SSM) Parameter Store & AWS Secrets Manager | AWS native via IAM scoped roles |
-| **Backend App** | NestJS REST API with Redis cache sidecar and MongoDB connectivity | `example-BE/deploy/dev` |
-| **Frontend App** | React SPA served via Nginx with client-side routing | `example-FE/deploy/dev` |
+| **Backend App** | NestJS REST API with Redis cache sidecar and MongoDB connectivity | `<backend-repo>/deploy/dev` |
+| **Frontend App** | React SPA served via Nginx with client-side routing | `<frontend-repo>/deploy/dev` |
 
 ---
 
@@ -69,10 +69,10 @@ example is a containerized microservices platform running on Amazon Web Services
 1. **Ingress Routing:**
    * All external HTTP requests arrive at port 80 of the shared ALB and receive an immediate `301 Moved Permanently` to port 443 HTTPS.
    * Path patterns evaluate against listener rules in order of priority:
-     * `/api/*` (Priority 10) forwards to `example-be` target group.
-     * `/*` (Priority 100) forwards to `example-fe` target group.
+     * `/api/*` (Priority 10) forwards to `backend` target group.
+     * `/*` (Priority 100) forwards to `frontend` target group.
      * Unmatched requests return an immediate `404 Not Found`.
 2. **Direct Ports:**
    * For direct backend debugging or dedicated socket listeners, an optional direct HTTPS port (e.g. port 3000) can be attached to the ALB forwarding directly to the backend target group.
 3. **Internal App-to-App & Sidecars:**
-   * In-process sidecars (e.g., Redis container in `example-be`) communicate via `localhost:<port>` within the Fargate task network namespace.
+   * In-process sidecars (e.g., Redis container in `backend`) communicate via `localhost:<port>` within the Fargate task network namespace.

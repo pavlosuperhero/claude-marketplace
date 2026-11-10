@@ -41,7 +41,7 @@ This plugin automates and governs the lifecycle of microservices and cloud infra
 This plugin enforces guardrails automatically:
 
 - **PreToolUse** — Warns before destructive Terraform commands (`destroy`, `apply -auto-approve`, `state rm`).
-- **PostToolUse** — Forces TDD orchestrator execution after any `deploy/` file is modified.
+- **PostToolUse** — Prompts Claude to run the TDD orchestrator after a `deploy/` file edit.
 - **Stop** — Blocks session completion if `config.yaml` fails schema validation or `terraform fmt -check`.
 
 ---

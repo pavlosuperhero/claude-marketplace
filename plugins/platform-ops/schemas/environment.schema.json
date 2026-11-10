@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/environment.schema.json",
-  "title": "exampleEnvironmentSpecification",
-  "description": "Schema for defining and validating a example infrastructure environment (e.g. dev, stage, prod)",
+  "$id": "https://raw.githubusercontent.com/pavlosuperhero/claude-marketplace/main/plugins/platform-ops/schemas/environment.schema.json",
+  "title": "PlatformOpsEnvironmentSpecification",
+  "description": "Schema for defining and validating an infrastructure environment (e.g. dev, stage, prod)",
   "type": "object",
   "required": ["environment", "awsRegion", "project", "network", "cluster", "alb"],
   "properties": {
@@ -17,7 +17,7 @@
     },
     "project": {
       "type": "string",
-      "default": "example"
+      "minLength": 1
     },
     "network": {
       "type": "object",

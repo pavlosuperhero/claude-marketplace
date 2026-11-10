@@ -33,7 +33,7 @@ Test-Driven Development (TDD) for Infrastructure adapts the classic Red-Green-Re
 
 ## 2. Using the Native Terraform Test Framework
 
-example utilizes Terraform's native testing framework (`.tftest.hcl`), introducing fast, deterministic testing without provisioning real AWS infrastructure:
+Platform Ops uses Terraform's native testing framework (`.tftest.hcl`), introducing fast, deterministic testing without provisioning real AWS infrastructure:
 
 * **Mock Providers:** `mock_provider "aws"` mocks all API calls, preventing AWS credential dependencies and eliminating cloud costs.
 * **Command Mode:** Running with `command = apply` or `command = plan` checks HCL logic, conditionals, dynamic blocks, and variable validation rules.
@@ -42,10 +42,10 @@ example utilizes Terraform's native testing framework (`.tftest.hcl`), introduci
 ### Running Contract Tests:
 ```bash
 # Run application contract test suite
-terraform -chdir=example-INFR/iac/ecs-app-module test
+terraform -chdir=/path/to/app-module test
 
 # Run environment contract test suite
-terraform -chdir=example-INFR/iac/ecs-environment-module test
+terraform -chdir=/path/to/env-module test
 ```
 
 ---

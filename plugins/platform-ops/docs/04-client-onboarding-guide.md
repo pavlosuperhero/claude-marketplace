@@ -10,25 +10,25 @@ The platform provides a set of **predefined shared resources** (in `terraform.tf
 
 The following resources are managed centrally by the Platform/Lifecycle team in `lifecycle/<env>/terraform.tfvars` and `iac/ecs-environment-module`:
 
-| Resource | Predefined Platform Value | Source / Scope |
+| Resource | Value to Confirm | Source / Scope |
 | :--- | :--- | :--- |
 | **VPC** | Default AWS VPC | Platform Shared |
-| **Subnet IDs** | `subnet-00000000000000002`, `subnet-00000000000000004`, `subnet-00000000000000003` | `terraform.tfvars:subnet_ids` |
-| **ALB Security Group** | `sg-00000000000000001` | `terraform.tfvars:alb_sg_id` |
-| **Tasks Security Group** | `tasks-security-group` | `data.aws_security_group.tasks` |
-| **Shared ALB** | `example-dev-alb` | `iac/ecs-environment-module/vpc.tf` |
-| **Shared Cluster** | `example-ecs` (Fargate + Fargate Spot) | `iac/ecs-environment-module/ecs.tf` |
-| **Shared Execution Role**| `example-ecs-exec` | `iac/ecs-environment-module/rbac.tf` |
+| **Subnet IDs** | Configured subnet IDs | `terraform.tfvars:subnet_ids` |
+| **ALB Security Group** | `<alb-security-group-id>` | `terraform.tfvars:alb_sg_id` |
+| **Tasks Security Group** | `<tasks-security-group>` | `data.aws_security_group.tasks` |
+| **Shared ALB** | `<project>-dev-alb` | `<env-module>/vpc.tf` |
+| **Shared Cluster** | `<ecs-cluster>` (Fargate + Fargate Spot) | `<env-module>/ecs.tf` |
+| **Shared Execution Role**| `<execution-role>` | `<env-module>/rbac.tf` |
 | **IAM Role Boundary** | `arn:aws:iam::<account_id>:policy/example-task-boundary` | Enforced on all task roles |
-| **Central Build ECR** | `<account_id>.dkr.ecr.<region>.amazonaws.com` | ECR repos: `example-build`, etc. |
+| **Central Build ECR** | `<account_id>.dkr.ecr.<region>.amazonaws.com` | ECR repos: `<builder-ecr-repository>`, etc. |
 
 ---
 
 ## 2. The Intake Questionnaire & Escalation Matrix
 
 ### Section A: Identity & Ownership
-1. **Service Identifier:** Kebab-case service name (e.g. `example-certs`).
-2. **Repository Location:** GitHub organization and repo name (e.g. `example-org/example-CERTS`).
+1. **Service Identifier:** Kebab-case service name (e.g. `cert-service`).
+2. **Repository Location:** GitHub organization and repo name (e.g. `example-org/cert-service`).
 3. **Owning Team & Tech Lead:** Service contact.
 
 ---
@@ -39,11 +39,11 @@ The following resources are managed centrally by the Platform/Lifecycle team in 
 6. **Standard Question:** What rule priority should it have? (e.g. `5` for specific routes before `/api/*`).
 7. **🚨 ESCALATION QUESTION:** *Does your service require a dedicated non-default VPC, private isolated subnets (no public IPs), or custom IP whitelist CIDRs on the ALB?*
    * **If YES -> ESCALATION TO PLATFORM TEAM:**
-     * Platform team must provision dedicated subnets or update `alb_sg_id` (`sg-00000000000000001`) in `lifecycle/<env>/terraform.tfvars`.
+     * Platform team must provision dedicated subnets or update `alb_sg_id` (`<alb-security-group-id>`) in `lifecycle/<env>/terraform.tfvars`.
      * The app deployment cannot proceed until the platform team allocates these IDs.
 8. **🚨 ESCALATION QUESTION:** *Does your service require a dedicated direct HTTPS port on the ALB (e.g., port 3000 or 8443) or a custom Route53 subdomain (e.g., `certs.example.com`)?*
    * **If YES -> ESCALATION TO PLATFORM TEAM:**
-     * Platform team must verify port availability and configure the listener certificate / Route 53 validation records in `example-INFR/lifecycle/<env>`.
+     * Platform team must verify port availability and configure the listener certificate / Route 53 validation records in `<infra-repo>/lifecycle/<env>`.
 
 ---
 
@@ -51,7 +51,7 @@ The following resources are managed centrally by the Platform/Lifecycle team in 
 9. **Standard Sizing:** Choose standard Fargate CPU (`256`, `512`, `1024`, `2048`) and Memory (`512`, `1024`, `2048`, `4096`).
 10. **🚨 ESCALATION QUESTION:** *Does your service require dedicated EC2 instances, GPU support, persistent EBS volumes, or compute > 4096 CPU units?*
     * **If YES -> ESCALATION TO PLATFORM TEAM:**
-      * Shared cluster `example-ecs` only provides Fargate and Fargate Spot capacity.
+      * Shared cluster `<ecs-cluster>` only provides Fargate and Fargate Spot capacity.
       * Platform team must configure an EC2 or custom capacity provider.
 
 ---
@@ -59,7 +59,7 @@ The following resources are managed centrally by the Platform/Lifecycle team in 
 ### Section D: Cloud Permissions & IAM Boundaries (Escalation Check 3)
 11. **Standard Self-Service Permissions:**
     * Amazon SES email sending (`SES: true`).
-    * Amazon S3 bucket read/write (`S3_BUCKET: "example-files"`).
+    * Amazon S3 bucket read/write (`S3_BUCKET: "example-service-files"`).
     * SSM parameter store reads (`/service/*`).
     * Secrets Manager secret reads (`JWT_SECRET`, `DB_URI`).
 12. **🚨 ESCALATION QUESTION:** *Does your application need access to AWS services outside the standard set (e.g., DynamoDB, SQS, SNS, RDS, KMS, or cross-account roles)?*

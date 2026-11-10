@@ -27,7 +27,7 @@ An autonomous, production-grade **Spec-Driven Development (SDD)** and **Test-Dri
    * Instant local and CI plan-level contract assertion checks in < 3 seconds with zero AWS costs.
 
 3. **Autonomous Turnkey Scaffolding:**
-   * Generates production-ready Terraform modules calling `ecs-app-module`.
+   * Generates Terraform wrappers for your application and environment modules.
    * Provisions scoped IAM task roles (SES email, S3 bucket access, SSM/SecretsManager read).
    * Generates ready-to-run GitHub Actions CI/CD workflows.
 
@@ -39,13 +39,13 @@ An autonomous, production-grade **Spec-Driven Development (SDD)** and **Test-Dri
 platform-ops/
 ├── .claude-plugin/
 │   └── plugin.json                       # Claude Code plugin manifest
-├── SKILL.md                              # Claude Code skill definition (primary, used by marketplace)
+├── SKILL.md                              # Plugin overview
 ├── skills/
 │   └── platform-ops/
-│       └── SKILL.md                      # Alternate skill path (legacy; kept for compatibility)
+│       └── SKILL.md                      # Skill loaded by Claude Code
 ├── hooks/
 │   ├── hooks.json                        # Hook definitions (PostToolUse, Stop)
-│   ├── post-tool-hardgate.sh             # Fires after any file write — enforces TDD run on deploy/ changes
+│   ├── post-tool-hardgate.sh             # Requests a TDD run after deploy/ file edits
 │   ├── pre-tool-guard.sh                 # PreToolUse safety checks
 │   └── stop-hardgate.sh                  # Blocks session stop until schema + fmt pass (exits 2 on failure)
 ├── docs/
@@ -61,7 +61,8 @@ platform-ops/
 │   ├── service-spec.schema.json          # Master service onboarding schema
 │   └── environment.schema.json           # Environment lifecycle schema
 ├── scripts/
-│   └── tdd_orchestrator.py               # 3-layer TDD runner (schema → contract tests → plan)
+│   ├── tdd_orchestrator.py               # 3-layer TDD runner (schema → contract tests → plan)
+│   └── platform_ops_paths.py             # Shared plugin and local-spec paths
 ├── templates/
 │   ├── app/                              # Microservice deployment templates
 │   └── env/                              # Environment lifecycle templates
@@ -78,7 +79,35 @@ platform-ops/
 
 ## Usage in Claude Code
 
+Load a local checkout with `claude --plugin-dir /absolute/path/to/plugins/platform-ops` from your service repository. Use `/platform-ops:verify` to run the checks. The bundled scripts resolve relative to the installed plugin, and deployment paths resolve from your working directory.
+
+If you host Claude Code through the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/plugins), pass `plugins=[{"type": "local", "path": "/absolute/path/to/plugins/platform-ops"}]` to `ClaudeAgentOptions` and set `cwd` to the service repository. The SDK loads the same plugin components.
+
 Prompt Claude Code to onboard any new Node.js microservice:
 ```
-Onboard a new Node.js service named "example-certs" on port 3000, health check "/api/v1/certs/health", ALB path "/api/v1/certs/*" with priority 5, using central ECR artifactory.
+Onboard a new Node.js service named "cert-service" on port 3000, health check "/api/v1/certs/health", ALB path "/api/v1/certs/*" with priority 5, using central ECR artifactory.
 ```
+
+## Configuration
+
+Set these environment variables in the shell that launches Claude Code or pass the corresponding flags when running a script. Flags take precedence over the environment.
+
+| CLI flag | Environment variable | Value |
+| --- | --- | --- |
+| `--infra-dir` | `INFRA_REPO_PATH` | Directory with the Terraform configuration and runnable contract tests. Required for the orchestrator. |
+| `--config` | `APP_CONFIG_PATH` | Deployment YAML path for the orchestrator, ingress checker, and Stop hook. |
+| `--schema` | `APP_SCHEMA_PATH` | Optional app schema override, also used by the Stop hook. |
+| `--specs-dir` | `ADDITIONAL_SPECS_PATH` or `PROJECT_SPECS_PATH` | Optional local spec directory. Otherwise both tools look for `Project_Specifications` in the current directory and up to three ancestors. |
+| `--workspace-root` | `WORKSPACE_ROOT` | Parent of sibling service repos for ingress checks. |
+
+When scaffolding from a template, resolve these placeholders from the target project before generating files.
+
+| Scope | Template inputs |
+| --- | --- |
+| Project and AWS | `PROJECT_NAME`, `ENVIRONMENT`, `AWS_REGION` |
+| Terraform | `APP_MODULE_SOURCE`, `ENV_MODULE_SOURCE`, `STATE_BUCKET`, `STATE_KEY`, `STATE_REGION` |
+| ECR and CI | `ECR_REPOSITORIES` (comma-separated quoted names), `BUILDER_ECR_REPOSITORY`, `RUNNER_PROJECT_NAME`, `RUNNER_TAG_SSM_PATH`, `INFRA_REPOSITORY_URL` |
+
+Use the existing bucket, key, and region when regenerating manifests for an existing deployment. Terraform uses those values to locate its state.
+
+The deployment specification PDF can be regenerated with `python3 tests/generate_pdf.py` from the plugin directory. Use `--title` and `--output` for a project-specific copy.

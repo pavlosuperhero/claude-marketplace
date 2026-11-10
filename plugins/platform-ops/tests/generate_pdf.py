@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
 """
-Generates the comprehensive example-deployment-spec.pdf using PostScript and ps2pdf.
+Generates the platform deployment specification using PostScript and ps2pdf.
 Reads the specification markdown documents and compiles them into a styled multi-page PDF.
 """
 
-import os
-import sys
-import subprocess
-import glob
-import re
-
 import argparse
+import os
+from pathlib import Path
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+from textwrap import wrap
+
+
+# Built-in PostScript fonts need ASCII approximations for these Markdown glyphs.
+PS_CHARACTERS = str.maketrans({
+    "─": "-", "━": "-", "│": "|", "═": "=", "▼": "v",
+    "┌": "+", "┐": "+", "└": "+", "┘": "+", "┬": "+", "┴": "+",
+    "├": "+", "┤": "+", "┼": "+", "→": "->", "←": "<-",
+    "–": "-", "—": "-", "’": "'", "‘": "'", "“": '"', "”": '"',
+})
+
+
+def printable(text):
+    return text.translate(PS_CHARACTERS).encode("ascii", "ignore").decode("ascii")
+
 
 def escape_ps(text):
     """Escape parenthesis and backslashes for PostScript strings."""
@@ -32,23 +46,28 @@ def parse_args():
         default=None,
         help="Target path for generated PDF."
     )
+    parser.add_argument(
+        "--title", default="Platform Deployment Specification",
+        help="Document title used on the cover and in the PDF metadata.",
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
-    default_base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    docs_dir = args.docs_dir or os.path.join(default_base, "docs")
-    pdf_out = args.output_pdf or os.path.join(docs_dir, "example-deployment-spec.pdf")
-    ps_temp = os.path.join(docs_dir, "temp_spec.ps")
+    docs_dir = Path(args.docs_dir) if args.docs_dir else Path(__file__).resolve().parents[1] / "docs"
+    pdf_out = Path(args.output_pdf) if args.output_pdf else docs_dir / "platform-deployment-spec.pdf"
+    md_files = sorted(docs_dir.glob("*.md"))
+    if not md_files:
+        print(f"Error: No Markdown files in {docs_dir}", file=sys.stderr)
+        return 1
 
-    md_files = sorted(glob.glob(os.path.join(docs_dir, "*.md")))
-
+    title = printable(" ".join(args.title.split()))
 
     # PostScript header with basic typography setup
     ps_lines = [
         "%!PS-Adobe-3.0",
-        "%%Title: example Platform Deployment Specification",
-        "%%Creator: Antigravity AI Systems Architect",
+        f"%%Title: {title}",
+        "%%Creator: Platform Ops",
         "%%Pages: (atend)",
         "%%BoundingBox: 0 0 595 842", # A4
         "%%EndComments",
@@ -76,7 +95,7 @@ def main():
         "  headerFont",
         "  0.4 0.4 0.4 setrgbcolor",
         "  leftMargin topMargin 15 add moveto",
-        "  (example PLATFORM SPECIFICATION - ARCHITECTURE & DEPLOYMENT) show",
+        "  (PLATFORM OPS - ARCHITECTURE & DEPLOYMENT) show",
         "  0.7 0.7 0.7 setrgbcolor",
         "  0.5 setlinewidth",
         "  leftMargin topMargin 10 add moveto rightMargin topMargin 10 add lineto stroke",
@@ -85,7 +104,7 @@ def main():
         "  footerFont",
         "  0.4 0.4 0.4 setrgbcolor",
         "  leftMargin bottomMargin moveto",
-        "  (CONFIDENTIAL - organization example PROJECT) show",
+        "  (Platform Operations) show",
         "  rightMargin 40 sub bottomMargin moveto",
         "  (Page ) show pageNumber 10 string cvs show",
         "  0.7 0.7 0.7 setrgbcolor",
@@ -98,8 +117,8 @@ def main():
         "} def",
         "",
         "/checkPage {",
-        "  dup currentY sub bottomMargin 25 add lt {",
-        "    pop newPage",
+        "  currentY exch sub bottomMargin 25 add lt {",
+        "    newPage",
         "  } if",
         "} def",
         "",
@@ -135,7 +154,7 @@ def main():
         "  0 0 0 setrgbcolor",
         "  bodyFont",
         "  leftMargin 10 add currentY moveto",
-        "  (\267 ) show",
+        r"  (\267 ) show",
         "  show",
         "  /currentY currentY 12 sub def",
         "} def",
@@ -153,7 +172,7 @@ def main():
         "titleFont",
         "0.1 0.2 0.5 setrgbcolor",
         "leftMargin 700 moveto",
-        "(example PLATFORM ARCHITECTURE & SPECIFICATION) show",
+        f"({escape_ps(title)}) show",
         "/currentY 660 def",
         "h2Font",
         "0.3 0.3 0.3 setrgbcolor",
@@ -162,56 +181,40 @@ def main():
         "/currentY 630 def",
         "bodyFont",
         "leftMargin currentY moveto",
-        "(Generated: September 15, 2026 | Version: 1.0.0 | Status: APPROVED) show",
         "0.8 0.8 0.8 setrgbcolor",
         "leftMargin 615 moveto rightMargin 615 lineto stroke",
         "/currentY 580 def",
     ]
 
     for md_path in md_files:
-        basename = os.path.basename(md_path)
-        with open(md_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        try:
+            lines = md_path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            print(f"Error reading {md_path}: {error}", file=sys.stderr)
+            return 1
 
-        ps_lines.append(f"% --- Document: {basename} ---")
         in_code_block = False
-
         for line in lines:
-            line_str = line.rstrip()
-            if not line_str:
+            if line.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if not line.strip():
                 ps_lines.append("/currentY currentY 6 sub def")
                 continue
 
-            if line_str.startswith("```"):
-                in_code_block = not in_code_block
-                continue
-
-            if in_code_block:
-                clean = escape_ps(line_str[:85])
-                ps_lines.append(f"({clean}) printCode")
-                continue
-
-            if line_str.startswith("# "):
-                clean = escape_ps(line_str[2:])
-                ps_lines.append("/currentY currentY 12 sub def")
-                ps_lines.append(f"({clean}) printH1")
-            elif line_str.startswith("## "):
-                clean = escape_ps(line_str[3:])
-                ps_lines.append("/currentY currentY 8 sub def")
-                ps_lines.append(f"({clean}) printH2")
-            elif line_str.startswith("### "):
-                clean = escape_ps(line_str[4:])
-                ps_lines.append(f"({clean}) printH2")
-            elif line_str.startswith("* ") or line_str.startswith("- "):
-                clean = escape_ps(line_str[2:][:90])
-                ps_lines.append(f"({clean}) printBullet")
-            elif line_str.startswith("|"):
-                # Simple table line formatting
-                clean = escape_ps(re.sub(r"\s+", " ", line_str)[:90])
-                ps_lines.append(f"({clean}) printCode")
+            if in_code_block or line.startswith("|"):
+                procedure, content, width = "printCode", line, 85
+            elif line.startswith("# "):
+                procedure, content, width = "printH1", line[2:], 60
+            elif line.startswith(("## ", "### ")):
+                procedure, content, width = "printH2", line.lstrip("# "), 75
+            elif line.startswith(("* ", "- ")):
+                procedure, content, width = "printBullet", line[2:], 90
             else:
-                clean = escape_ps(line_str[:95])
-                ps_lines.append(f"({clean}) printBody")
+                procedure, content, width = "printBody", line, 95
+
+            for segment in wrap(printable(content), width=width, drop_whitespace=False):
+                ps_lines.append(f"({escape_ps(segment)}) {procedure}")
 
     # Finish last page
     ps_lines.append("newPage")
@@ -219,20 +222,26 @@ def main():
     ps_lines.append("%%Pages: pageNumber 1 sub")
     ps_lines.append("%%EOF")
 
-    with open(ps_temp, "w", encoding="utf-8") as f:
-        f.write("\n".join(ps_lines))
+    try:
+        with TemporaryDirectory(prefix=".platform-spec-", dir=pdf_out.parent) as temp_dir:
+            ps_path = Path(temp_dir) / "spec.ps"
+            pdf_path = Path(temp_dir) / "spec.pdf"
+            ps_path.write_text("\n".join(ps_lines), encoding="ascii")
+            subprocess.run(
+                ["ps2pdf", ps_path, pdf_path], capture_output=True, text=True,
+                check=True, timeout=120,
+            )
+            os.replace(pdf_path, pdf_out)
+    except subprocess.CalledProcessError as error:
+        print(f"Error converting PostScript to PDF: {error.stderr}", file=sys.stderr)
+        return 1
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(f"Error generating PDF: {error}", file=sys.stderr)
+        return 1
 
-    print(f"Written PostScript to {ps_temp}")
-    
-    # Run ps2pdf
-    cmd = ["ps2pdf", ps_temp, pdf_out]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode == 0:
-        print(f"[✓] Generated PDF successfully: {pdf_out}")
-        os.remove(ps_temp)
-    else:
-        print(f"[✗] Error converting PS to PDF: {res.stderr}")
-        sys.exit(1)
+    print(f"[✓] Generated PDF successfully: {pdf_out}")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

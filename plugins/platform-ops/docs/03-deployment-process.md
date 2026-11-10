@@ -1,12 +1,12 @@
 # 03. Deployment Process
 
-This document details exactly how services and infrastructure changes are deployed across the example platform.
+This document details exactly how services and infrastructure changes are deployed across the platform.
 
 ---
 
 ## 1. End-to-End Application Deployment Flow
 
-Every application repository (`example-BE`, `example-FE`, or any new service) executes an autonomous, 5-stage deployment pipeline triggered upon push or pull request to the `main` branch.
+Every application repository (`backend`, `frontend`, or any new service) executes an autonomous, 5-stage deployment pipeline triggered upon push or pull request to the `main` branch.
 
 ```
 ┌─────────────┐     ┌────────────────┐     ┌────────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -16,7 +16,7 @@ Every application repository (`example-BE`, `example-FE`, or any new service) ex
 ```
 
 ### Stage 1: Continuous Integration (Lint & Test)
-* **Runner:** Ephemeral AWS CodeBuild container (`codebuild-example-<APP>-<run_id>`).
+* **Runner:** Ephemeral AWS CodeBuild container (`codebuild-<runner-project>-<run_id>-<run_attempt>`).
 * **Actions:**
   * Dependency installation with cache restoration (`~/.npm`).
   * Static code analysis & linting (`npm run lint`).
@@ -44,7 +44,7 @@ Every application repository (`example-BE`, `example-FE`, or any new service) ex
 
 ### Stage 4: Terraform Plan & Apply
 * **Path:** `deploy/<env>/`
-* **Module Resolution:** Configures Git credentials to fetch the private module `example-INFR//iac/ecs-app-module` using either the GitHub PAT or Deploy SSH key.
+* **Module Resolution:** Configures Git credentials to fetch the private module set by `APP_MODULE_SOURCE` using either the GitHub PAT or Deploy SSH key.
 * **Commands:**
   ```bash
   terraform init -upgrade
@@ -62,10 +62,10 @@ Every application repository (`example-BE`, `example-FE`, or any new service) ex
 
 ## 2. Infrastructure & Lifecycle Deployment Flow
 
-Platform infrastructure changes in `example-INFR` follow a controlled lifecycle:
+Platform infrastructure changes in `<infra-repo>` follow a controlled lifecycle:
 
 1. **State Isolation:**
-   * Infrastructure state is isolated in S3 (`example-terraform-state-bucket`, key `example` or `example-<env>`).
+   * Infrastructure state is isolated in S3 (`<state-bucket>`, key `<state-key>`).
 2. **Execution Steps:**
    ```bash
    cd lifecycle/<env>
@@ -80,13 +80,13 @@ Platform infrastructure changes in `example-INFR` follow a controlled lifecycle:
 
 ## 3. Dynamic Configuration & Secrets Provisioning Flow
 
-When an application requires a new environment variable or secret, it is provisioned through the automated workflow in `example-INFR/.github/workflows/provision-config.yml`:
+When an application requires a new environment variable or secret, it is provisioned through the automated workflow in `<infra-repo>/.github/workflows/provision-config.yml`:
 
 1. Developer triggers `workflow_dispatch` with:
-   * Service (`example-be`, `example-fe`, etc.)
+   * Service (`backend`, `frontend`, etc.)
    * Type (`variable` or `secret`)
    * Name (`REDIS_PORT` or `STRIPE_API_KEY`)
-   * SSM Path (`/example-be/redis_port`)
+   * SSM Path (`/backend/redis_port`)
    * Secure flag (`true` or `false`)
 2. Workflow creates the parameter or secret in AWS with value `"PLACEHOLDER"`.
 3. Workflow updates `deploy/<service>/<env>/config.yaml`.

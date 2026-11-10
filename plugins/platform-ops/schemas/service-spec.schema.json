@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/service-spec.schema.json",
-  "title": "exampleServiceSpecification",
-  "description": "Master contract schema for onboarding a new application service to the example platform",
+  "$id": "https://raw.githubusercontent.com/pavlosuperhero/claude-marketplace/main/plugins/platform-ops/schemas/service-spec.schema.json",
+  "title": "PlatformOpsServiceSpecification",
+  "description": "Master contract schema for onboarding a new application service to the platform",
   "type": "object",
   "required": ["serviceId", "displayName", "repository", "runtime", "environments"],
   "properties": {
     "serviceId": {
       "type": "string",
-      "pattern": "^example-[a-z0-9-]+$",
-      "description": "Standardized service identifier (e.g. example-be, example-fe, example-notifications)"
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Service identifier using lowercase letters, digits, and hyphens (e.g. web-frontend)"
     },
     "displayName": {
       "type": "string",
@@ -19,7 +19,7 @@
       "type": "object",
       "required": ["owner", "name", "defaultBranch"],
       "properties": {
-        "owner": { "type": "string", "default": "example-org" },
+        "owner": { "type": "string" },
         "name": { "type": "string" },
         "defaultBranch": { "type": "string", "default": "main" }
       }

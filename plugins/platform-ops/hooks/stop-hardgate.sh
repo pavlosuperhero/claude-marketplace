@@ -10,13 +10,16 @@ if echo "$INPUT" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; th
   exit 0
 fi
 
-# 2. Determine the project root (prefer CLAUDE_PROJECT_ROOT, fall back to CWD)
-PROJECT_ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
+# 2. Determine the project root, retaining the legacy override for other hosts.
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-${CLAUDE_PROJECT_ROOT:-$PWD}}"
 
 # 3. Check if any deploy/ config.yaml exists in the project
-CONFIG_FILE=$(find "$PROJECT_ROOT" -maxdepth 4 -path "*/deploy/*/config.yaml" 2>/dev/null | head -n 1 || true)
+CONFIG_FILE="${APP_CONFIG_PATH:-}"
+if [ -z "$CONFIG_FILE" ]; then
+  CONFIG_FILE=$(find "$PROJECT_ROOT" -maxdepth 4 -path "*/deploy/*/config.yaml" -type f -print -quit 2>/dev/null || true)
+fi
 
-if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+if [ -z "$CONFIG_FILE" ]; then
   # No deployment configuration present in this repo, allow stop
   exit 0
 fi
@@ -36,17 +39,12 @@ fi
 
 # 5. Check if the config passes schema validation
 VALIDATOR="${PLUGIN_ROOT}/tests/validate_configs.py"
-if [ -f "$VALIDATOR" ]; then
-  VAL_OUTPUT=$(uv run "$VALIDATOR" --config "$CONFIG_FILE" 2>&1 || true)
-  
-  if echo "$VAL_OUTPUT" | grep -q "VALIDATION FAILURES DETECTED\|FAILED:"; then
-    echo "❌ [HARDGATE BLOCKED]: Cannot stop! Deployment configuration '$CONFIG_FILE' violates specification schema:" >&2
-    echo "$VAL_OUTPUT" >&2
-    echo "" >&2
-    echo "👉 ACTION REQUIRED: Fix the schema violations above, then execute the TDD orchestrator:" >&2
-    echo "   uv run \"${PLUGIN_ROOT}/scripts/tdd_orchestrator.py\" --config \"$CONFIG_FILE\"" >&2
-    exit 2
-  fi
+if ! VAL_OUTPUT=$(uv run "$VALIDATOR" --config "$CONFIG_FILE" 2>&1); then
+  echo "❌ [HARDGATE BLOCKED]: Validation failed for '$CONFIG_FILE'." >&2
+  echo "$VAL_OUTPUT" >&2
+  echo "Resolve the validation error, then run the orchestrator with --infra-dir or INFRA_REPO_PATH." >&2
+  printf '  uv run %q --config %q\n' "$PLUGIN_ROOT/scripts/tdd_orchestrator.py" "$CONFIG_FILE" >&2
+  exit 2
 fi
 
 # 6. Check if Terraform files exist and are formatted

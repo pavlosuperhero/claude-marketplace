@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/app-config.schema.json",
-  "title": "exampleAppConfig",
+  "$id": "https://raw.githubusercontent.com/pavlosuperhero/claude-marketplace/main/plugins/platform-ops/schemas/app-config.schema.json",
+  "title": "PlatformOpsAppConfig",
   "description": "Schema for validating application deployment configuration (deploy/<env>/config.yaml)",
   "type": "object",
   "required": ["NAME", "PORT"],
@@ -64,7 +64,7 @@
           },
           "ecr_image": {
             "type": "string",
-            "description": "ECR image repository:tag relative to caller account ECR (e.g. example-build:redis-alpine)"
+            "description": "ECR image repository:tag relative to caller account ECR (e.g. shared-build:redis-alpine)"
           },
           "image": {
             "type": "string",
@@ -122,7 +122,7 @@
           "ssm_path": {
             "type": "string",
             "pattern": "^/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*$",
-            "description": "Hierarchical SSM Parameter path (e.g. /example-be/database_name)"
+            "description": "Hierarchical SSM Parameter path (e.g. /backend/database_name)"
           },
           "secure": {
             "type": "boolean",

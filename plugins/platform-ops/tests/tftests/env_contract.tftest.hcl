@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# example SPEC-DRIVEN DEVELOPMENT: ENVIRONMENT CONTRACT TEST SUITE
+# PLATFORM OPS SPEC-DRIVEN DEVELOPMENT: ENVIRONMENT CONTRACT TEST SUITE
 # Validates that any environment configuration satisfies baseline shared
 # infrastructure requirements (ALB, HTTPS listeners, ECS cluster, CodeBuild runners).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -75,11 +75,11 @@ variables {
   region     = "eu-central-1"
   subnet_ids = ["subnet-00000000000000002", "subnet-00000000000000004"]
   alb_sg_id  = "sg-00000000000000001"
-  ecr_repo   = ["example-build", "example-fe", "example-be"]
+  ecr_repo   = ["example-build", "example-frontend", "example-backend"]
 
   codebuild_projects = {
-    "example-INFRA" = {
-      source_location     = "https://github.com/example-org/example-infra"
+    "example-infra" = {
+      source_location     = "https://github.com/example/platform-infra"
       runner_tag_ssm_path = "/ci/runners/terraform/tag"
       buildspec           = "version: 0.2\nphases:\n  build:\n    commands:\n      - echo runner"
       webhook_filters = [

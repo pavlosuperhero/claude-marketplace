@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  AWS_REGION: eu-central-1
+  AWS_REGION: {{AWS_REGION}}
   SERVICE_NAME: {{SERVICE_ID}}
 
 permissions:
@@ -88,13 +88,13 @@ jobs:
       - name: Configure Git Credentials for Terraform Modules
         run: git config --global url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf "https://github.com"
       - name: Terraform Init
-        run: terraform -chdir=deploy/dev init -upgrade
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} init -upgrade
       - name: Terraform Format Check
-        run: terraform -chdir=deploy/dev fmt -check
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} fmt -check
       - name: Terraform Validate
-        run: terraform -chdir=deploy/dev validate
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} validate
       - name: Terraform Plan
-        run: terraform -chdir=deploy/dev plan
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} plan
       - name: Cleanup Git Credentials
         if: always()
         run: git config --global --unset-all url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf || true
@@ -103,7 +103,7 @@ jobs:
     name: Terraform Apply
     if: ${{ !failure() && !cancelled() && !contains(github.event.head_commit.message || '', '[skip-ci]') && github.ref == 'refs/heads/main' }}
     needs: terraform-plan
-    environment: dev
+    environment: {{ENVIRONMENT}}
     runs-on:
       - codebuild-{{RUNNER_PROJECT_NAME}}-${{ github.run_id }}-${{ github.run_attempt }}
       - buildspec-override:true
@@ -113,9 +113,9 @@ jobs:
       - name: Configure Git Credentials for Terraform Modules
         run: git config --global url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf "https://github.com"
       - name: Terraform Init
-        run: terraform -chdir=deploy/dev init -upgrade
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} init -upgrade
       - name: Terraform Apply
-        run: terraform -chdir=deploy/dev apply -auto-approve
+        run: terraform -chdir=deploy/{{ENVIRONMENT}} apply -auto-approve
       - name: Cleanup Git Credentials
         if: always()
         run: git config --global --unset-all url."https://x-access-token:${GITHUB_MODULE_PAT}@github.com".insteadOf || true

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# example SPEC-DRIVEN DEVELOPMENT: APP CONTRACT TEST SUITE
+# PLATFORM OPS SPEC-DRIVEN DEVELOPMENT: APP CONTRACT TEST SUITE
 # Validates that any application service_config fulfills the ECS Fargate,
 # ALB Ingress, CloudWatch, and IAM task contract.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,9 +135,9 @@ mock_provider "aws" {
 }
 
 variables {
-  project        = "example"
-  region         = "eu-central-1"
-  service_name   = "example-app"
+  project      = "example"
+  region       = "eu-central-1"
+  service_name = "example-app"
   service_config = {
     name = "contract-test-app"
     port = 8080

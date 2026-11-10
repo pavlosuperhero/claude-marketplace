@@ -1,6 +1,6 @@
 variable "region" {
   type    = string
-  default = "eu-central-1"
+  default = "{{AWS_REGION}}"
 }
 
 variable "desired_count" {

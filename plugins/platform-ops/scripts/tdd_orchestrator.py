@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# dependencies = [
-#     "pyyaml",
-# ]
+# dependencies = []
 # ///
 """
 TDD IaC Orchestrator & Live Demo Test Runner
@@ -23,6 +21,9 @@ import subprocess
 import time
 import re
 import argparse
+from pathlib import Path
+
+from platform_ops_paths import PLUGIN_ROOT, add_specs_argument, find_specs_dir
 
 # ANSI Color Codes for terminal presentation
 BOLD = "\033[1m"
@@ -201,68 +202,38 @@ def parse_args():
         "-i", "--infra-dir",
         dest="infra_dir",
         default=os.environ.get("INFRA_REPO_PATH"),
-        help="Path to the Terraform infrastructure module or test directory (or env INFRA_REPO_PATH)."
+        help="Path to the Terraform module containing the contract tests (or env INFRA_REPO_PATH)."
     )
     parser.add_argument(
         "-s", "--schema",
         dest="schema_path",
-        default=None,
-        help="Custom path to the app-config JSON schema (optional)."
+        default=os.environ.get("APP_SCHEMA_PATH"),
+        help="Custom path to the app-config JSON schema (or env APP_SCHEMA_PATH)."
     )
-    parser.add_argument(
-        "-d", "--specs-dir",
-        dest="specs_dir",
-        default=os.environ.get("ADDITIONAL_SPECS_PATH") or os.environ.get("PROJECT_SPECS_PATH"),
-        help="Path to an additional local specifications directory on PC (or env ADDITIONAL_SPECS_PATH / PROJECT_SPECS_PATH)."
-    )
+    add_specs_argument(parser)
     return parser.parse_args()
+
+def has_terraform_config(directory):
+    return directory.is_dir() and any(
+        path.is_file() and path.name.endswith((".tf", ".tf.json")) for path in directory.iterdir()
+    )
+
 
 def main():
     args = parse_args()
-    plugin_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    
-    # Resolve infra directory
-    infra_dir = args.infra_dir
-    if not infra_dir:
-        # 'terraform test' needs a real configuration to bind mock_provider against, so a
-        # candidate only counts if it contains .tf files. The bundled tests/tftests dir
-        # holds .tftest.hcl only; it used to be listed first and always exists, so it
-        # permanently shadowed the real module and Layer 2 could never bind providers.
-        candidates = [
-            os.path.abspath(os.path.join(plugin_dir, "../../../example-INFR/iac/ecs-app-module")),
-            os.path.abspath(os.path.join(plugin_dir, "../../example-INFR/iac/ecs-app-module")),
-            os.path.abspath(os.path.join(plugin_dir, "tests/tftests")),
-        ]
-        rejected = []
-        for c in candidates:
-            if not os.path.isdir(c):
-                continue
-            if any(f.endswith(".tf") for f in os.listdir(c)):
-                infra_dir = c
-                break
-            rejected.append(c)
+    if not args.infra_dir:
+        print(f"{RED}Error: Pass --infra-dir or set INFRA_REPO_PATH to the Terraform module directory.{RESET}",
+              file=sys.stderr)
+        sys.exit(EXIT_ERROR)
 
-        if infra_dir is None and rejected:
-            print(f"{RED}Error: found candidate test directories, but none contains a "
-                  f"Terraform configuration (.tf files):{RESET}")
-            for r in rejected:
-                print(f"  {YELLOW}• {r}  (.tftest.hcl only - no .tf to test against){RESET}")
-            print("\n'terraform test' resolves mock_provider against the required_providers")
-            print("of the configuration in the target directory. With no .tf present, every")
-            print("test fails with 'unknown provider ...' regardless of 'terraform init'.")
-            print(f"\n{MAGENTA}🤖 AI AGENT INSTRUCTION:{RESET}")
-            print("Pass --infra-dir pointing at the real Terraform module (the directory")
-            print("containing main.tf / variables.tf), or set INFRA_REPO_PATH. Report to the")
-            print("human that Layer 2 cannot run until this path is correct.\n")
-            sys.exit(EXIT_ERROR)
+    infra_dir = Path(args.infra_dir).expanduser().resolve()
+    if not has_terraform_config(infra_dir):
+        print(f"{RED}Error: No Terraform configuration (.tf or .tf.json files) in {infra_dir}.{RESET}",
+              file=sys.stderr)
+        sys.exit(EXIT_ERROR)
 
-    if not infra_dir or not os.path.exists(infra_dir):
-        print(f"{RED}Error: Infrastructure directory not specified or does not exist.{RESET}")
-        print("Please pass --infra-dir /path/to/module or set INFRA_REPO_PATH environment variable.")
-        sys.exit(1)
-
-    validator_script = os.path.join(plugin_dir, "tests/validate_configs.py")
-    schema_path = args.schema_path or os.path.join(plugin_dir, "schemas/app-config.schema.json")
+    validator_script = PLUGIN_ROOT / "tests/validate_configs.py"
+    schema_path = Path(args.schema_path).expanduser() if args.schema_path else PLUGIN_ROOT / "schemas/app-config.schema.json"
 
     print_banner("AI-DRIVEN IAC ORCHESTRATOR: TDD LOOP")
     start_time = time.time()
@@ -270,22 +241,7 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # STAGE 0: Check for Additional Local Specifications
     # ─────────────────────────────────────────────────────────────
-    specs_dir = args.specs_dir
-    if not specs_dir:
-        # Auto-probe common local PC directories
-        candidates = [
-            os.path.abspath("Project_Specifications"),
-            os.path.abspath("../Project_Specifications"),
-            os.path.abspath("../../Project_Specifications"),
-            os.path.abspath("../../../Project_Specifications"),
-            os.path.abspath("example-specs"),
-            os.path.abspath("../example-specs"),
-            os.path.abspath("../../example-specs"),
-        ]
-        for c in candidates:
-            if os.path.isdir(c) and any(f.endswith(".md") for f in os.listdir(c)):
-                specs_dir = c
-                break
+    specs_dir = find_specs_dir(args.specs_dir)
 
     run_step("Checking for Additional Local Specifications")
     if specs_dir and os.path.isdir(specs_dir):
@@ -296,7 +252,7 @@ def main():
             print(f"    • {doc}")
         if len(spec_docs) > 6:
             print(f"    • ... and {len(spec_docs) - 6} more documents")
-        print(f"{GREEN}  ✓ Local specifications loaded and checked for architecture constraints.{RESET}\n")
+        print(f"{GREEN}  ✓ Local specifications available for architecture review.{RESET}\n")
     elif specs_dir and not os.path.exists(specs_dir):
         print(f"  {YELLOW}⚠ Specified local specs path not found: {specs_dir}{RESET}\n")
     else:
@@ -320,18 +276,26 @@ def main():
 
         deploy_dir = os.path.dirname(os.path.abspath(args.config_path))
         run_step(f"Layer 1: Validating Specification ({os.path.basename(args.config_path)})")
-        val_cmd = ["uv", "run", validator_script, "--config", args.config_path, "--schema", schema_path]
-        proc = subprocess.run(val_cmd, capture_output=True, text=True)
-        
-        if proc.returncode != 0:
+        val_cmd = ["uv", "run", str(validator_script), "--config", args.config_path,
+                   "--schema", str(schema_path)]
+        if specs_dir:
+            val_cmd.extend(["--specs-dir", str(specs_dir)])
+        val_rc, val_out, val_err = run_tool(val_cmd, timeout=120)
+        if val_err:
+            print_clue_block(
+                "Layer 1 - config validator could not run", "TOOL_UNAVAILABLE", "BLOCKED",
+                "Check uv, the validator path, and the tool timeout before re-running.",
+                val_cmd, val_out, val_err,
+            )
+            sys.exit(EXIT_ERROR)
+
+        if val_rc != EXIT_OK:
             elapsed = time.time() - start_time
             print(f"\n{RED}{'━' * 70}{RESET}")
             print(f"{RED}🔴 [RED PHASE: SPECIFICATION VIOLATION DETECTED]{RESET} ({elapsed:.2f}s)")
             print(f"{RED}{'━' * 70}{RESET}")
             print(f"{YELLOW}Actionable Diagnostics for LLM Self-Healing:{RESET}\n")
-            print(proc.stdout)
-            if proc.stderr:
-                print(proc.stderr)
+            print(val_out)
             print(f"{MAGENTA}🤖 AI AGENT INSTRUCTION:{RESET}")
             print("Analyze the schema violation above, patch the invalid properties in config.yaml, and re-run the orchestrator.\n")
             sys.exit(1)
@@ -342,7 +306,7 @@ def main():
         # The JSON Schema documents that ALB.priority must be unique across services
         # sharing the ALB, but a single-file check cannot see peers. This closes that gap.
         run_step("Layer 1: Cross-Service ALB Ingress Collision Check")
-        collision_script = os.path.join(plugin_dir, "tests/check_ingress_collisions.py")
+        collision_script = str(PLUGIN_ROOT / "tests/check_ingress_collisions.py")
         if not os.path.exists(collision_script):
             print(f"{YELLOW}  ⚠ Collision checker missing at {collision_script}{RESET}")
             print(f"{YELLOW}    Ingress uniqueness was NOT verified in this run.{RESET}")
@@ -372,9 +336,10 @@ def main():
                 print(f"{GREEN}  ✓ ALB Ingress: no priority or path-pattern collision with peers{RESET}")
 
     # Check Terraform formatting & validation if .tf files exist in deploy/
+    has_deploy_config = deploy_dir is not None and has_terraform_config(Path(deploy_dir))
     env = os.environ.copy()
     env["TF_CLI_CONFIG_FILE"] = "/dev/null"
-    if deploy_dir and any(f.endswith(".tf") for f in os.listdir(deploy_dir)):
+    if has_deploy_config:
         run_step(f"Layer 1: Terraform Format & Syntax Validation in {os.path.basename(deploy_dir)}")
         fmt_cmd = ["terraform", f"-chdir={deploy_dir}", "fmt", "-check"]
         fmt_rc, fmt_out, fmt_err = run_tool(fmt_cmd, env=env, timeout=120)
@@ -435,6 +400,14 @@ def main():
     m_skip = re.search(r"(\d+)\s+skipped", output)
     skips = int(m_skip.group(1)) if m_skip else len(re.findall(r"\.\.\.\s*skip", output))
 
+    if tf_rc == 0 and passes == 0 and fails == 0:
+        print_clue_block(
+            "Layer 2 - no contract assertions ran", "NO_TEST_RESULTS", "BLOCKED",
+            "Point --infra-dir at a module with runnable Terraform contract tests.",
+            tf_cmd, output, tf_tool_err,
+        )
+        sys.exit(EXIT_ERROR)
+
     if tf_rc != 0 or fails > 0 or tf_tool_err:
         elapsed = time.time() - start_time
 
@@ -492,38 +465,33 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # STAGE 3: Layer 3 - Plan Verification (Dry-Run Preview)
     # ─────────────────────────────────────────────────────────────
-    if deploy_dir and any(f.endswith(".tf") for f in os.listdir(deploy_dir)):
+    if has_deploy_config:
         run_step(f"Layer 3: Verifying Terraform Plan in {os.path.basename(deploy_dir)}")
-        plan_cmd = ["terraform", f"-chdir={deploy_dir}", "plan", "-no-color"]
+        plan_cmd = ["terraform", f"-chdir={deploy_dir}", "plan", "-no-color",
+                    "-input=false", "-detailed-exitcode"]
         plan_rc, plan_out, plan_tool_err = run_tool(plan_cmd, env=env, timeout=900)
 
         m_plan = re.search(
             r"Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy", plan_out
         )
-        if plan_rc == 0 and m_plan:
-            print(f"{GREEN}  ✓ Plan Preview: {m_plan.group(1)} to add, {m_plan.group(2)} to change, {m_plan.group(3)} to destroy.{RESET}")
+        if not plan_tool_err and plan_rc in (0, 2):
+            if plan_rc == 0:
+                summary = "Infrastructure up to date (0 changes)."
+            elif m_plan:
+                adds, changes, destroys = m_plan.groups()
+                summary = f"{adds} to add, {changes} to change, {destroys} to destroy."
+            else:
+                summary = "Changes detected. See the plan output for details."
+            print(f"{GREEN}  ✓ Plan Preview: {summary}{RESET}")
+            if plan_rc == 2 and not m_plan:
+                print(plan_out)
             layer3_status = "VERIFIED"
-            layer3_reason = (
-                f"{m_plan.group(1)} add / {m_plan.group(2)} change / {m_plan.group(3)} destroy"
-            )
-        elif plan_rc == 0 and "No changes" in plan_out:
-            print(f"{GREEN}  ✓ Plan Preview: Infrastructure up to date (0 changes).{RESET}")
-            layer3_status = "VERIFIED"
-            layer3_reason = "no changes; infrastructure up to date"
         else:
-            # A non-zero plan must never fall through to GREEN. Classify it, print every
-            # available clue, and let the disposition decide the exit code.
             p_class, p_disp, p_fix = classify_failure(plan_out)
             if plan_tool_err:
                 p_class, p_disp, p_fix = ("TOOL_UNAVAILABLE", "BLOCKED",
                                           "Install Terraform or add it to PATH. "
                                           "The plan was NOT previewed.")
-            elif plan_rc == 0:
-                # Exit 0 but no recognizable plan summary: output shape changed.
-                p_class, p_disp, p_fix = ("UNPARSEABLE_PLAN_OUTPUT", "BLOCKED",
-                                          "terraform plan exited 0 but printed no 'Plan:' "
-                                          "or 'No changes' line. Read the raw output; do "
-                                          "not assume the plan succeeded.")
             print_clue_block(
                 "Layer 3 - terraform plan did not produce a verified preview",
                 p_class, p_disp, p_fix, plan_cmd, plan_out, plan_tool_err,

@@ -16,9 +16,9 @@ terraform {
   required_version = ">= 1.12.2"
 
   backend "s3" {
-    bucket       = "example-terraform-state-bucket"
-    key          = "example-{{ENVIRONMENT}}"
-    region       = "eu-central-1"
+    bucket       = "{{STATE_BUCKET}}"
+    key          = "{{STATE_KEY}}"
+    region       = "{{STATE_REGION}}"
     encrypt      = true
     use_lockfile = true
   }
@@ -32,7 +32,7 @@ provider "tls" {}
 provider "archive" {}
 
 module "platform_ecs" {
-  source = "../../iac/ecs-environment-module"
+  source = "{{ENV_MODULE_SOURCE}}"
 
   project               = var.project
   region                = var.region

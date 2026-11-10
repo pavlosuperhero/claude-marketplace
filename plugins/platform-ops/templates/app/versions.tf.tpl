@@ -8,9 +8,9 @@ terraform {
   required_version = ">= 1.12.2"
 
   backend "s3" {
-    bucket       = "example-terraform-state-bucket"
-    key          = "{{SERVICE_ID}}"
-    region       = "eu-central-1"
+    bucket       = "{{STATE_BUCKET}}"
+    key          = "{{STATE_KEY}}"
+    region       = "{{STATE_REGION}}"
     encrypt      = true
     use_lockfile = true
   }

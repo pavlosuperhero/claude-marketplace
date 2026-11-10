@@ -2,6 +2,8 @@
 # /// script
 # dependencies = [
 #     "pyyaml",
+#     "jsonschema>=4.22,<5",
+#     "referencing>=0.28,<1",
 # ]
 # ///
 """
@@ -15,77 +17,64 @@ CLI Usage:
   uv run tests/validate_configs.py config1.yaml config2.yaml
 """
 
-import sys
-import os
-import re
-import json
 import argparse
+import json
+import os
+from pathlib import Path
+import sys
+
 import yaml
+from jsonschema.exceptions import SchemaError
+from jsonschema.validators import validator_for
+from referencing import Registry, Resource
+from referencing.exceptions import Unresolvable
 
-def validate_schema(instance, schema, path="root"):
-    errors = []
-    
-    # Check type
-    expected_type = schema.get("type")
-    if expected_type:
-        type_map = {
-            "string": str,
-            "integer": int,
-            "number": (int, float),
-            "boolean": bool,
-            "object": dict,
-            "array": list,
-        }
-        if expected_type == "integer" and isinstance(instance, bool):
-            errors.append(f"{path}: expected integer, got boolean")
-            return errors
-        if expected_type in type_map and not isinstance(instance, type_map[expected_type]):
-            errors.append(f"{path}: expected {expected_type}, got {type(instance).__name__}")
-            return errors
+# The validator is a standalone script invoked by both uv and the Claude Code hook.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from platform_ops_paths import PLUGIN_ROOT, add_specs_argument, find_specs_dir
 
-    # Check enums
-    if "enum" in schema and instance not in schema["enum"]:
-        errors.append(f"{path}: value '{instance}' not in allowed enums: {schema['enum']}")
 
-    # String validations
-    if isinstance(instance, str):
-        if "pattern" in schema and not re.search(schema["pattern"], instance):
-            errors.append(f"{path}: string '{instance}' does not match pattern {schema['pattern']}")
+SCHEMA_DIR = PLUGIN_ROOT / "schemas"
+SCHEMA_FILES = {
+    "app": "app-config.schema.json",
+    "environment": "environment.schema.json",
+    "service": "service-spec.schema.json",
+}
 
-    # Number validations
-    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
-        if "minimum" in schema and instance < schema["minimum"]:
-            errors.append(f"{path}: {instance} is less than minimum {schema['minimum']}")
-        if "maximum" in schema and instance > schema["maximum"]:
-            errors.append(f"{path}: {instance} is greater than maximum {schema['maximum']}")
 
-    # Array validations
-    if isinstance(instance, list):
-        if "minItems" in schema and len(instance) < schema["minItems"]:
-            errors.append(f"{path}: items count {len(instance)} less than minItems {schema['minItems']}")
-        if "items" in schema:
-            for idx, item in enumerate(instance):
-                errors.extend(validate_schema(item, schema["items"], f"{path}[{idx}]"))
+def load_validator(schema_path):
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    if not isinstance(schema, (dict, bool)):
+        raise ValueError("A JSON Schema must be an object or a boolean.")
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
 
-    # Object validations
-    if isinstance(instance, dict):
-        required_props = schema.get("required", [])
-        for req in required_props:
-            if req not in instance:
-                errors.append(f"{path}: missing required property '{req}'")
-        
-        properties = schema.get("properties", {})
-        additional_allowed = schema.get("additionalProperties", True)
+    # Resolve the service schema's app contract from the installed plugin.
+    app_schema = json.loads((SCHEMA_DIR / SCHEMA_FILES["app"]).read_text(encoding="utf-8"))
+    registry = Registry().with_resource(app_schema["$id"], Resource.from_contents(app_schema))
+    return validator_class(schema, registry=registry)
 
-        for key, value in instance.items():
-            if key in properties:
-                errors.extend(validate_schema(value, properties[key], f"{path}.{key}"))
-            elif additional_allowed is False:
-                errors.append(f"{path}: unexpected additional property '{key}'")
-            elif isinstance(additional_allowed, dict):
-                errors.extend(validate_schema(value, additional_allowed, f"{path}.{key}"))
 
-    return errors
+def validate_file(path, validator):
+    try:
+        with path.open(encoding="utf-8") as config_file:
+            config = yaml.safe_load(config_file)
+        errors = list(validator.iter_errors(config))
+    except (OSError, UnicodeError, yaml.YAMLError, Unresolvable) as error:
+        print(f"[✗] ERROR: {path}: {error}")
+        return False
+
+    relative_path = os.path.relpath(path)
+    if not errors:
+        print(f"[✓] PASSED: {relative_path}")
+        return True
+
+    print(f"[✗] FAILED: {relative_path}")
+    for error in errors:
+        location = "config" + error.json_path[1:]
+        print(f"    - {location}: {error.message}")
+    return False
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -106,14 +95,9 @@ def parse_args():
         "-s", "--schema",
         dest="schema_path",
         default=None,
-        help="Path to the JSON schema file to validate against."
+        help="Path to the JSON schema (or env APP_SCHEMA_PATH for app configs)."
     )
-    parser.add_argument(
-        "-d", "--specs-dir",
-        dest="specs_dir",
-        default=os.environ.get("ADDITIONAL_SPECS_PATH") or os.environ.get("PROJECT_SPECS_PATH"),
-        help="Path to additional local specifications on PC to cross-reference (or env ADDITIONAL_SPECS_PATH)."
-    )
+    add_specs_argument(parser)
     parser.add_argument(
         "-t", "--schema-type",
         dest="schema_type",
@@ -125,91 +109,46 @@ def parse_args():
 
 def main():
     args = parse_args()
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Resolve schema path based on --schema-type or explicit --schema
-    schema_type_map = {
-        "app": "app-config.schema.json",
-        "environment": "environment.schema.json",
-        "service": "service-spec.schema.json",
-    }
-    default_schema = os.path.abspath(os.path.join(script_dir, "../schemas", schema_type_map[args.schema_type]))
-    schema_path = args.schema_path or default_schema
-
-    if not os.path.exists(schema_path):
-        print(f"Error: Schema file not found: {schema_path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(schema_path, "r", encoding="utf-8") as f:
-        schema = json.load(f)
-
-    target_files = list(args.files)
+    target_files = [*args.files]
     if args.single_config:
         target_files.append(args.single_config)
-
     if not target_files:
         print("Usage: uv run tests/validate_configs.py <path-to-config.yaml> [--schema <schema.json>]")
-        sys.exit(1)
+        return 1
 
-    all_passed = True
+    configured_schema = args.schema_path
+    if not configured_schema and args.schema_type == "app":
+        configured_schema = os.environ.get("APP_SCHEMA_PATH")
+    schema_path = Path(configured_schema).expanduser() if configured_schema else SCHEMA_DIR / SCHEMA_FILES[args.schema_type]
+    try:
+        validator = load_validator(schema_path)
+    except (OSError, UnicodeError, ValueError, SchemaError) as error:
+        print(f"Error loading schema {schema_path}: {error}", file=sys.stderr)
+        return 1
+
     print("=" * 60)
     print("SPEC-DRIVEN DEVELOPMENT: CONFIG VALIDATOR")
     print(f"Schema: {os.path.relpath(schema_path)}")
 
-    # Check for additional local specifications
-    specs_dir = args.specs_dir
-    if not specs_dir:
-        candidates = [
-            os.path.abspath("Project_Specifications"),
-            os.path.abspath("../Project_Specifications"),
-            os.path.abspath("../../Project_Specifications"),
-            os.path.abspath("../../../Project_Specifications"),
-            os.path.abspath("example-specs"),
-            os.path.abspath("../example-specs"),
-        ]
-        for c in candidates:
-            if os.path.isdir(c) and any(f.endswith(".md") for f in os.listdir(c)):
-                specs_dir = c
-                break
-
-    if specs_dir and os.path.isdir(specs_dir):
-        doc_count = len([f for f in os.listdir(specs_dir) if f.endswith(".md")])
+    specs_dir = find_specs_dir(args.specs_dir)
+    if specs_dir and specs_dir.is_dir():
+        doc_count = sum(path.is_file() for path in specs_dir.glob("*.md"))
         print(f"Local Specs Detected: {os.path.relpath(specs_dir)} ({doc_count} documents)")
-    elif specs_dir and not os.path.exists(specs_dir):
-        print(f"Local Specs Path: Not found ({specs_dir})")
+    elif specs_dir:
+        print(f"Local Specs Path: Not a directory ({specs_dir})")
     else:
         print("Local Specs: None specified (using standard baseline)")
     print("=" * 60)
 
-    for file_path in target_files:
-        abs_path = os.path.abspath(file_path)
-        if not os.path.exists(abs_path):
-            print(f"[-] SKIPPED: {file_path} not found")
-            continue
-        try:
-            with open(abs_path, "r", encoding="utf-8") as f:
-                config_data = yaml.safe_load(f)
-            
-            errors = validate_schema(config_data, schema, path="config")
-            
-            if not errors:
-                print(f"[✓] PASSED: {os.path.relpath(abs_path)}")
-            else:
-                all_passed = False
-                print(f"[✗] FAILED: {os.path.relpath(abs_path)}")
-                for err in errors:
-                    print(f"    - {err}")
-        except Exception as e:
-            all_passed = False
-            print(f"[✗] ERROR: {file_path}: {e}")
-
+    results = [validate_file(Path(path).expanduser(), validator) for path in target_files]
     print("=" * 60)
-    if all_passed:
+    if all(results):
         print("ALL CONFIGURATIONS CONFORM TO SPECIFICATION")
-        sys.exit(0)
-    else:
-        print("VALIDATION FAILURES DETECTED")
-        sys.exit(1)
+        return 0
+
+    print("VALIDATION FAILURES DETECTED")
+    return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

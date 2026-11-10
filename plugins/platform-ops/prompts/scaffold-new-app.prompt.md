@@ -12,16 +12,16 @@ Follow this strict protocol:
 
 ### Phase 0: Check for Additional Local Specifications
 1. **Local Specs Path Check:**
-   * Check if additional specifications exist on the local machine (e.g. `./Project_Specifications/`, `example-specs/`, or pass `--specs-dir`).
+   * Check if additional specifications exist on the local machine (`Project_Specifications/` or `--specs-dir`).
    * If local specs exist, inspect:
      - `09_NETWORKING_AND_INGRESS.md` for assigned ALB listener priorities (e.g. avoid colliding with `/api/*` at priority 10 or `/api/v1/certs/*` at 5).
      - `04_APPLICATION_DEPLOYMENT_CONFIG.md` for memory/CPU constraints.
      - `07_IAM_SECURITY_AND_OIDC.md` for task permissions boundaries (`example-task-boundary`).
-   * Pre-fill matching parameters from local specs.
+   * Pre-fill matching parameters from local specs. Ask for the ingress path and priority and verify both against sibling deployment configs.
 
 ### Phase 1: Intake, Predefined Values & Escalation Check
 1. **Intake Questions (from `docs/04-client-onboarding-guide.md`):**
-   * Service identifier (e.g. `example-certs`)
+   * Service identifier (e.g. `cert-service`)
    * Listening TCP port (e.g. `3000`)
    * Health check path (e.g. `/healthz`)
    * Ingress path pattern & unique ALB priority (e.g. `["/api/v1/certs/*"]`, priority `5`)
@@ -32,10 +32,10 @@ Follow this strict protocol:
 
 2. **Predefined Platform Defaults Check:**
    Verify if the app can use standard platform defaults:
-   * Shared ALB (`example-dev-alb`)
-   * Shared Subnet IDs (`subnet-00000000000000002`, `subnet-00000000000000004`, `subnet-00000000000000003`)
-   * Shared Security Groups (`alb_sg_id`, `tasks-security-group`)
-   * Shared Fargate Cluster (`example-ecs`) and Execution Role (`example-ecs-exec`)
+   * Shared ALB (`<project>-dev-alb`)
+   * Shared Subnet IDs (Configured subnet IDs)
+   * Shared Security Groups (`<alb-security-group-id>`, `<tasks-security-group>`)
+   * Shared Fargate Cluster (`<ecs-cluster>`) and Execution Role (`<execution-role>`)
 
 3. **🚨 Escalation Triggers Check:**
    Ask the user:
@@ -59,7 +59,7 @@ If errors occur, fix the YAML and re-validate until 100% compliant.
 ---
 
 ### Phase 4: Scaffold Deployment Manifests
-Generate standard Terraform wrapper files in `deploy/<env>/`:
+Resolve the project name, application module source, state settings, and runner inputs from [Configuration](../README.md#configuration). Generate the Terraform wrapper files in `deploy/<env>/`:
 - `main.tf` (from `templates/app/main.tf.tpl`)
 - `locals.tf` (from `templates/app/locals.tf.tpl`)
 - `providers.tf` (from `templates/app/providers.tf.tpl`)

@@ -1,6 +1,6 @@
 # 06. Spec-Driven Development (SDD) Workflow
 
-Spec-Driven Development (SDD) is the operational paradigm used in example to ensure all infrastructure, application deployments, and CI/CD pipelines are generated from a single, deterministic contract rather than ad-hoc scripts or prompts.
+Spec-Driven Development (SDD) is the operational paradigm used by Platform Ops to ensure all infrastructure, application deployments, and CI/CD pipelines are generated from a single, deterministic contract rather than ad-hoc scripts or prompts.
 
 ---
 
