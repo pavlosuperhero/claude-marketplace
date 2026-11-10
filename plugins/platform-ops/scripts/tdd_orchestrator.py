@@ -6,7 +6,7 @@
 TDD IaC Orchestrator & Live Demo Test Runner
 Executes the Red-Green-Refactor loop:
   1. Validates declarative config against JSON Schema (using uv / pyyaml)
-  2. Runs native Terraform contract tests (*.tftest.hcl) in mock mode
+  2. Runs the selected native Terraform contract test suite
   3. Formats presentation-friendly RED / GREEN output for human audience & AI self-healing
 
 CLI Usage:
@@ -47,6 +47,9 @@ def run_step(step_name):
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_ESCALATE = 2
+EXIT_PARTIAL = 3
+
+APP_CONTRACT = "app_contract.tftest.hcl"
 
 # Synthetic returncodes for failures that happen before a tool produces output.
 TOOL_MISSING = 127
@@ -210,6 +213,11 @@ def parse_args():
         default=os.environ.get("APP_SCHEMA_PATH"),
         help="Custom path to the app-config JSON schema (or env APP_SCHEMA_PATH)."
     )
+    parser.add_argument(
+        "--contract-test", default=os.environ.get("CONTRACT_TEST_PATH"),
+        help=f"Terraform test file relative to --infra-dir (default: tests/{APP_CONTRACT}, then {APP_CONTRACT}).",
+    )
+    parser.add_argument("--strict", action="store_true", help="Exit 3 when verification is incomplete.")
     add_specs_argument(parser)
     return parser.parse_args()
 
@@ -217,6 +225,17 @@ def has_terraform_config(directory):
     return directory.is_dir() and any(
         path.is_file() and path.name.endswith((".tf", ".tf.json")) for path in directory.iterdir()
     )
+
+
+def find_contract_test(infra_dir, configured):
+    candidates = [Path(configured)] if configured else [Path("tests") / APP_CONTRACT, Path(APP_CONTRACT)]
+    for path in candidates:
+        if path.is_absolute() or not path.name.endswith((".tftest.hcl", ".tftest.json")):
+            continue
+        candidate = (infra_dir / path).resolve()
+        if candidate.is_relative_to(infra_dir) and candidate.is_file():
+            return candidate.relative_to(infra_dir)
+    return None
 
 
 def main():
@@ -264,7 +283,8 @@ def main():
     # ─────────────────────────────────────────────────────────────
     # Per-layer verdicts. These drive the final summary so it can never claim
     # coverage for a layer that was skipped or blocked.
-    layer1_tf_status = "VERIFIED"
+    ingress_verified = False
+    layer1_tf_status = "NOT RUN"
     layer3_status = "NOT RUN"
     layer3_reason = "no .tf files found in the deploy directory"
 
@@ -311,7 +331,7 @@ def main():
             print(f"{YELLOW}  ⚠ Collision checker missing at {collision_script}{RESET}")
             print(f"{YELLOW}    Ingress uniqueness was NOT verified in this run.{RESET}")
         else:
-            col_cmd = ["uv", "run", collision_script, "--config", args.config_path]
+            col_cmd = ["uv", "run", collision_script, "--config", args.config_path, "--require-peers"]
             col_rc, col_out, col_err = run_tool(col_cmd, timeout=120)
 
             if col_err:
@@ -333,13 +353,15 @@ def main():
                 print(col_out)
                 print(f"{YELLOW}    Ingress uniqueness was NOT verified in this run.{RESET}")
             else:
-                print(f"{GREEN}  ✓ ALB Ingress: no priority or path-pattern collision with peers{RESET}")
+                ingress_verified = True
+                print(col_out, end="" if col_out.endswith("\n") else "\n")
 
     # Check Terraform formatting & validation if .tf files exist in deploy/
     has_deploy_config = deploy_dir is not None and has_terraform_config(Path(deploy_dir))
     env = os.environ.copy()
     env["TF_CLI_CONFIG_FILE"] = "/dev/null"
     if has_deploy_config:
+        layer1_tf_status = "VERIFIED"
         run_step(f"Layer 1: Terraform Format & Syntax Validation in {os.path.basename(deploy_dir)}")
         fmt_cmd = ["terraform", f"-chdir={deploy_dir}", "fmt", "-check"]
         fmt_rc, fmt_out, fmt_err = run_tool(fmt_cmd, env=env, timeout=120)
@@ -387,7 +409,19 @@ def main():
     # ─────────────────────────────────────────────────────────────
     run_step(f"Layer 2: Executing Native Contract Unit Tests in: {os.path.basename(infra_dir)}")
     
-    tf_cmd = ["terraform", f"-chdir={infra_dir}", "test", "-no-color"]
+    contract_test = find_contract_test(infra_dir, args.contract_test)
+    if contract_test is None:
+        print_clue_block(
+            "Layer 2 - required contract test file not found", "CONTRACT_TEST_NOT_FOUND", "BLOCKED",
+            f"Place {APP_CONTRACT} in the module or its tests/ directory, or set --contract-test "
+            "to a .tftest.hcl or .tftest.json file inside --infra-dir.",
+            ["terraform", f"-chdir={infra_dir}", "test"], args.contract_test or "",
+        )
+        sys.exit(EXIT_ERROR)
+
+    tf_cmd = ["terraform", f"-chdir={infra_dir}", "test", "-no-color", f"-filter={contract_test}"]
+    if contract_test.parent != Path("."):
+        tf_cmd.append(f"-test-directory={contract_test.parent}")
     tf_rc, output, tf_tool_err = run_tool(tf_cmd, env=env, timeout=900)
 
     # Parse results from output
@@ -521,13 +555,22 @@ def main():
     # FINAL VERDICT - reports only the layers that actually ran
     # ─────────────────────────────────────────────────────────────
     elapsed = time.time() - start_time
-    verified = ["Layer 1 (schema + ingress)"] if args.config_path else []
+    verified = []
+    unverified = []
+    if args.config_path:
+        verified.append("Layer 1 (schema)")
+        if ingress_verified:
+            verified.append("Layer 1 (ingress)")
+        else:
+            unverified.append("Layer 1 ingress: NOT VERIFIED")
     if layer1_tf_status == "VERIFIED" and deploy_dir:
         verified.append("Layer 1 (terraform fmt/validate)")
-    verified.append("Layer 2 (contract tests)")
-    unverified = []
-    if layer1_tf_status != "VERIFIED":
+    else:
         unverified.append(f"Layer 1 terraform: {layer1_tf_status}")
+    if skips:
+        unverified.append(f"Layer 2 contract tests: {skips} skipped")
+    else:
+        verified.append("Layer 2 (contract tests)")
     if layer3_status == "VERIFIED":
         verified.append("Layer 3 (plan preview)")
     else:
@@ -546,7 +589,7 @@ def main():
         print("Do NOT report this run as fully verified. State explicitly which layers did")
         print("not run and why, using the diagnostic blocks above. This is not deploy-ready")
         print("until every layer above is verified.\n")
-        sys.exit(EXIT_OK)
+        sys.exit(EXIT_PARTIAL if args.strict else EXIT_OK)
 
     print(f"\n{GREEN}{'━' * 70}{RESET}")
     print(f"{GREEN}🟢 [GREEN PHASE: ALL CONTRACT ASSERTIONS SATISFIED]{RESET} ({elapsed:.2f}s)")

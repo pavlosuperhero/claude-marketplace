@@ -95,10 +95,15 @@ Set these environment variables in the shell that launches Claude Code or pass t
 | CLI flag | Environment variable | Value |
 | --- | --- | --- |
 | `--infra-dir` | `INFRA_REPO_PATH` | Directory with the Terraform configuration and runnable contract tests. Required for the orchestrator. |
+| `--contract-test` | `CONTRACT_TEST_PATH` | Terraform test file relative to the module. Defaults to `tests/app_contract.tftest.hcl`, then `app_contract.tftest.hcl` at the module root. |
 | `--config` | `APP_CONFIG_PATH` | Deployment YAML path for the orchestrator, ingress checker, and Stop hook. |
 | `--schema` | `APP_SCHEMA_PATH` | Optional app schema override, also used by the Stop hook. |
 | `--specs-dir` | `ADDITIONAL_SPECS_PATH` or `PROJECT_SPECS_PATH` | Optional local spec directory. Otherwise both tools look for `Project_Specifications` in the current directory and up to three ancestors. |
 | `--workspace-root` | `WORKSPACE_ROOT` | Parent of sibling service repos for ingress checks. |
+
+Run the orchestrator with `--strict` in CI. An incomplete run reports `PARTIAL` and exits `3` in strict mode. Interactive runs preserve exit `0` for `PARTIAL`. For ALB-backed services, missing or unreadable peers make ingress verification incomplete. Select a trusted contract suite with mock providers because Terraform can execute `apply` steps defined in a test file.
+
+Run the orchestrator's regression tests with `python3 -m unittest discover -s tests` from the plugin directory.
 
 When scaffolding from a template, resolve these placeholders from the target project before generating files.
 

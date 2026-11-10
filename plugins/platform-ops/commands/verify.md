@@ -5,7 +5,7 @@ description: Run the full 3-layer TDD verification (Layer 1 Static Analysis & fm
 Execute the full 3-Layer TDD IaC Verification across this repository:
 
 1. Locate the deployment configuration file in `deploy/**/config.yaml`.
-2. Use the module directory from `INFRA_REPO_PATH`, or pass its path via `--infra-dir`. The directory must contain the Terraform configuration and contract tests. Run the orchestrator via Bash:
+2. Use the module directory from `INFRA_REPO_PATH`, or pass its path via `--infra-dir`. The runner looks for `app_contract.tftest.hcl` under `tests/` or the module root. Pass `--contract-test` for another suite. Run the orchestrator via Bash:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/scripts/tdd_orchestrator.py" --config "<path-to-config.yaml>" --infra-dir "<path-to-app-module>"
    ```

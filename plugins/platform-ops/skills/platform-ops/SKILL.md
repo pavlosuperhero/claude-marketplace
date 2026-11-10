@@ -81,6 +81,7 @@ When a user asks to deploy or onboard a new application or microservice:
    * Generate CI/CD workflow from `${CLAUDE_PLUGIN_ROOT}/templates/app/ci-workflow.yml.tpl`.
 
 6. **Run Contract Tests & Self-Heal (TDD) — 🛑 MANDATORY HARDGATE:**
+   * For new behavior, add or update a focused contract test before changing the implementation. Run it and confirm that it fails for the intended reason, make the smallest fix, and rerun it after refactoring.
    * **DO NOT SKIP THIS STEP.** Generating files without executing tests is strictly prohibited.
    * You **MUST** execute the TDD orchestrator using your Bash tool:
      ```bash
@@ -145,6 +146,7 @@ When generating, validating, or fixing configurations against failing tests:
    |------|---------|-------------|
    | `0` + `🟢 GREEN` | every layer verified | Proceed. |
    | `0` + `🟡 PARTIAL` | tests passed, some layer **did not run** | **Do not call this verified.** Report verbatim which layers did not run and why. |
+   | `3` + `🟡 PARTIAL` | incomplete verification with `--strict` | Block the CI gate and report the incomplete checks. |
    | `1` + `🔴 RED` | a real defect | Self-heal per Step 4, then re-run. |
    | `2` + `🟣 ESCALATION` | conflict only a human can resolve | **STOP. Do not edit any file.** Relay the options and wait. |
 

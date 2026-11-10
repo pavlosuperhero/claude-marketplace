@@ -20,6 +20,7 @@ Exit codes (stable contract for the orchestrator and for LLM agents):
   0 - no collision detected
   1 - script could not run (bad args, unreadable config, unparseable YAML)
   2 - COLLISION DETECTED, escalation required, do not auto-resolve
+  3 - verification incomplete when --require-peers is set
 
 CLI Usage:
   uv run tests/check_ingress_collisions.py --config /path/to/deploy/dev/config.yaml
@@ -252,6 +253,10 @@ def parse_args():
         default=os.environ.get("WORKSPACE_ROOT"),
         help="Directory containing all service repos. Defaults to the subject repo's parent.",
     )
+    parser.add_argument(
+        "--require-peers", action="store_true",
+        help="For services with ALB ingress, exit 3 if peers are missing or unreadable.",
+    )
     return parser.parse_args()
 
 
@@ -302,6 +307,9 @@ def main():
 
     conflicts = detect(subject, peers)
     if not conflicts:
+        if args.require_peers and (unreadable or not peers):
+            print("Ingress verification is incomplete. Provide readable peer configurations.")
+            sys.exit(3)
         print(f"OK: no ingress collision between '{subject['service']}' and {len(peers)} peer(s).")
         for r in sorted([subject] + [p for p in peers if p["has_alb"]],
                         key=lambda x: (x["priority"] is None, x["priority"])):
